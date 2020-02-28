@@ -3,4 +3,5 @@
 /.ipynb_checkpoints
 /.vscode
 /models
-
+*.pyc
+__pycache__
