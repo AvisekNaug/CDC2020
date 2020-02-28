@@ -777,12 +777,14 @@ def df2arrays(df, split: float = 0.75, shuffle: bool = False, predictorcols : li
 		X_test = inputreshaper(X_test, input_timesteps, output_timesteps)  # (eg samplesize, 1, 4 or 5)
 		y_test = outputreshaper(y_test, output_timesteps, len(outputcols), input_timesteps)  # (eg samplesize, 1, 1)
 
-	return [ X_train, X_test, y_train, y_test, X_scaler, y_scaler]
+	return [X_train, X_test, y_train, y_test, X_scaler, y_scaler]
 
 
-def minmaxscaling(x, feature_range=(0,1)):
+def minmaxscaling(x: np.ndarray, feature_range=(0,1)):
 
-	assert len(x.shape)<=2, "Cannot scale array with axis greater than 2. Array with {} axis passed".format(len(x.shape))
+	assert len(x.shape)<=2, "Cannot scale array with no of axis greater than 2. Array with {} axis passed".format(len(x.shape))
+	if len(x.shape)==1:
+		x = x.reshape(-1,1)
 
 	scaler = MinMaxScaler(feature_range=feature_range)
 	# Create scalar object
