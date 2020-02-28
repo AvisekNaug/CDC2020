@@ -12,21 +12,21 @@ from keras.regularizers import L1L2
 from keras.models import load_model
 from keras.callbacks import ModelCheckpoint
 
-import matplotlib
-from matplotlib import pyplot as plt
+from dataprocess.plotutils import pred_v_target_plot
 
 class lstm_model():
 	
 	
-	def __init__(self, inputdim: int, outputdim: int = 1, input_timesteps: int = 1, output_timesteps: int = 1,
-	batchsize = 32, reg_l1: float = 0.01, reg_l2: float = 0.02, period: int = 12, stateful: bool = True,
+	def __init__(self, saveloc: str, inputdim: int, outputdim: int = 1, input_timesteps: int = 1, output_timesteps: int = 1,
+	batch_size = 32, reg_l1: float = 0.01, reg_l2: float = 0.02, period: int = 12, stateful: bool = False,
 	modelerror = 'mse', optimizer = 'adam'):
 
+		self.saveloc = saveloc
 		self.inputdim = inputdim
 		self.outputdim = outputdim
 		self.input_timesteps = input_timesteps
 		self.output_timesteps = output_timesteps
-		self.batchszie = batchsize
+		self.batch_size = batch_size
 		self.l1, self.l2 = reg_l1, reg_l2
 		self.period = period
 		self.stateful = stateful
@@ -35,13 +35,20 @@ class lstm_model():
 
 		# time gaps in minutes, needed only for human readable results in output file
 		self.timegap = self.period*5
+		self.epochs = 0
 
 		# possible regularization strategies
 		self.regularizers = L1L2(self.l1, self.l2)
 
 		# logging error on each iteration subsequence
-		self.train_plot = []  # each element has (samplesize, outputsequence=1, feature=1)
-		self.test_plot = []  # each element has (samplesize, outputsequence=1, feature=1)
+		# self.preds_train = []  # each element has (samplesize, outputsequence=1, feature=1)
+		# self.preds_test = []  # each element has (samplesize, outputsequence=1, feature=1)
+
+		# create a file to log the error
+		if not self.saveloc.endswith('/'):  # attach forward slash if saveloc does not have one
+			self.saveloc += '/'
+		file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','w')
+		file.close()
 
 
 	# Create the network
@@ -76,13 +83,12 @@ class lstm_model():
 		self.reshape_layer = Reshape((self.input_timesteps*self.inputdim,),name='reshape_layer')(self.input_layer)
 		self.num_op = self.output_timesteps
 		self.input = RepeatVector(self.num_op, name='input_repeater')(self.reshape_layer)
-
 		self.out = self.input
 
 		# LSTM layers
 		for no_units, dropout, normalize in zip(lstmhiddenlayers, dropoutlist[0], batchnormalizelist[0]):
 
-			self.out = LSTM(no_units, return_sequences=True, recurrent_regularizer=self.regularizers)(self.out)
+			self.out = LSTM(no_units, return_sequences=True, recurrent_regularizer=self.regularizers, stateful = self.stateful)(self.out)
 
 			if dropout:
 				self.out = Dropout(0.2)(self.out)
@@ -106,4 +112,63 @@ class lstm_model():
 		self.model = Model(inputs=self.input_layer, outputs=self.out)
 		self.model.compile(loss=self.modelerror, optimizer=self.optimizer)
 
+
+	def show_model(self,):
+		print(self.model.summary())
 	
+	
+	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 100, saveModel: bool = False):
+
+		# Number of epochs to run
+		self.epochs = epochs
+
+		# train the model
+		self.history = self.model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, \
+				validation_data=(X_val, y_val) , verbose=2, shuffle=False)
+
+		if saveModel:
+			self.save_model()
+
+
+	def save_model(self,):
+
+			self.model.save(self.saveloc+'LSTM_model_{}epochs.h5'.format(self.epochs))
+
+	def evaluate_model(self, X_train, y_train, X_test, y_test, y_sc, saveplot: bool = False, Week: int = 0,
+	 lag: int = -1, outputdim_names = ['TotalEnergy']):
+	
+
+		# evaluate model on data. output -> (nsamples, output_timesteps, outputdim)
+		self.preds_train = self.model.predict(X_train, batch_size=self.batch_size)
+		self.preds_test = self.model.predict(X_test, batch_size=self.batch_size)
+
+		for i in range(self.outputdim):
+			for j in range(self.output_timesteps):
+
+				# log error on training data
+				rmse = sqrt(mean_squared_error(self.preds_train[:, j, i], y_train[:, j, i]))
+				cvrmse = 100*(rmse/np.mean(y_train[:, j, i]))
+				mae = mean_absolute_error(self.preds_train[:, j, i], y_train[:, j, i])
+				file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','a')
+				file.write('Week No:{}-Time Step {}: Train RMSE={} |Train CVRMSE={} \
+					|Train MAE={} \n'.format(Week,j+1, rmse, cvrmse, mae))
+				file.close()
+
+				# log error on test data
+				rmse = sqrt(mean_squared_error(self.preds_test[:, j, i], y_test[:, j, i]))
+				cvrmse = 100*(rmse/np.mean(y_test[:, j, i]))
+				mae = mean_absolute_error(self.preds_test[:, j, i], y_test[:, j, i])
+				file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','a')
+				file.write('Week No:{}-Time Step {}: Test RMSE={} |Test CVRMSE={} \
+					|Test MAE={} \n'.format(Week,j+1, rmse, cvrmse, mae))
+				file.close()
+
+		if saveplot:
+
+			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
+			 self.preds_train, y_train, self.saveloc, y_sc, lag = -1, outputdim_names = outputdim_names)
+
+			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
+			 self.preds_test, y_test, self.saveloc, y_sc, lag)
+
+		return [self.preds_train, self.preds_test]
