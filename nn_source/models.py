@@ -10,7 +10,7 @@ from keras.layers import Input, Dense, LSTM, RepeatVector, Reshape, Dropout, Bat
 from keras.callbacks import TensorBoard
 from keras.regularizers import L1L2
 from keras.models import load_model
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 
 from dataprocess.plotutils import pred_v_target_plot
 
@@ -115,7 +115,15 @@ class lstm_model():
 
 	def show_model(self,):
 		print(self.model.summary())
-	
+
+	def model_callbacks(self):
+
+		self.modelchkpoint = ModelCheckpoint(self.saveloc+'LSTM_model_{epoch:02d}_{val_loss:.2f}',
+		 monitor = 'val_loss', save_best_only = True, period=2)
+
+		self.earlystopping = EarlyStopping(monitor = 'val_loss', patience=5, restore_best_weights=True)
+
+		self.reduclronplateau = ReduceLROnPlateau(monitor = 'val_loss', patience=2, cooldown = 3)
 	
 	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 100, saveModel: bool = False):
 
@@ -132,7 +140,7 @@ class lstm_model():
 
 	def save_model(self,):
 
-			self.model.save(self.saveloc+'LSTM_model_{}epochs.h5'.format(self.epochs))
+			self.model.save(self.saveloc+'LSTM_model_{:02d}epochs.hdf5'.format(self.epochs))
 
 	def evaluate_model(self, X_train, y_train, X_test, y_test, y_sc, saveplot: bool = False, Week: int = 0,
 	 lag: int = -1, outputdim_names = ['TotalEnergy']):
