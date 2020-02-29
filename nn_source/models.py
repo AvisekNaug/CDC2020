@@ -116,7 +116,7 @@ class lstm_model():
 	def show_model(self,):
 		print(self.model.summary())
 
-	def model_callbacks(self):
+	def model_callbacks(self,):
 
 		self.modelchkpoint = ModelCheckpoint(self.saveloc+'LSTM_model_{epoch:02d}_{val_loss:.2f}',
 		 monitor = 'val_loss', save_best_only = True, period=2)
@@ -124,6 +124,7 @@ class lstm_model():
 		self.earlystopping = EarlyStopping(monitor = 'val_loss', patience=5, restore_best_weights=True)
 
 		self.reduclronplateau = ReduceLROnPlateau(monitor = 'val_loss', patience=2, cooldown = 3)
+
 	
 	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 100, saveModel: bool = False):
 
@@ -132,7 +133,8 @@ class lstm_model():
 
 		# train the model
 		self.history = self.model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, \
-				validation_data=(X_val, y_val) , verbose=2, shuffle=False)
+			validation_data=(X_val, y_val) , verbose=2, shuffle=False, callbacks=[self.modelchkpoint, \
+				self.earlystopping, self.reduclronplateau])
 
 		if saveModel:
 			self.save_model()
