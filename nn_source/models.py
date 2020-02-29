@@ -176,9 +176,11 @@ class lstm_model():
 		if saveplot:
 
 			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
-			 self.preds_train, y_train, self.saveloc, y_sc, lag = -1, outputdim_names = outputdim_names)
+			 self.preds_train, y_train, self.saveloc, y_sc, lag = -1, outputdim_names = outputdim_names,
+			 typeofplot="train")
 
 			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
-			 self.preds_test, y_test, self.saveloc, y_sc, lag)
+			 self.preds_test, y_test, self.saveloc, y_sc, lag = -1, outputdim_names = outputdim_names,
+			 typeofplot="test")
 
 		return [self.preds_train, self.preds_test]

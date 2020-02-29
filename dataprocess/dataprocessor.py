@@ -363,7 +363,8 @@ def dataframeplot(df, lazy = True, style = '*', ylabel : str = 'Y-axis', xlabel 
 		df {pd.DataFrame} -- The dataframe to plot
 	
 	Keyword Arguments:
-		lazy {bool} -- we don't want rowwise plot for each column] (default: {True})
+		lazy {bool} -- If true, single plot object plots all columns. Preferably set to false for plotting
+		 many columns(default: {True})
 		style {str} -- type of line (default: {'*'})
 		ylabel {str} -- label for yaxis (default: {'Y-axis'})
 		xlabel {str} -- label for xaxis (default: {'X-axis'})
