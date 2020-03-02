@@ -5,7 +5,15 @@ from math import sqrt
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-from tensorflow.keras import backend as K
+# import tensorflow as tf
+# physical_devices = tf.config.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(physical_devices[0], enable = True)
+
+import os
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+from tensorflow.keras import backend as K  
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dense, LSTM, RepeatVector, Reshape, Dropout, BatchNormalization, Activation
 from tensorflow.keras.callbacks import TensorBoard
@@ -16,7 +24,6 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLRO
 from dataprocess.plotutils import pred_v_target_plot
 
 class lstm_model():
-	
 	
 	def __init__(self, saveloc: str, inputdim: int, outputdim: int = 1, input_timesteps: int = 1, output_timesteps: int = 1,
 	batch_size = 32, reg_l1: float = 0.01, reg_l2: float = 0.02, period: int = 12, stateful: bool = False,
