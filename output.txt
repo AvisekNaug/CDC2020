@@ -1,0 +1,1 @@
+Default GPU Device: /device:GPU:0

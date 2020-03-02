@@ -9,12 +9,12 @@ git clone https://github.com/AvisekNaug/CDC2020.git
 
 Create new virtual environment
 ```
-python3.6 -m venv cdc2020
+conda create --name cdctf2gpu
 ```
 
 Install requirements
 ```
-pip install requirements.txt
+conda install requirements.txt
 ```
 
 

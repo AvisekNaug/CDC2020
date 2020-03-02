@@ -12,7 +12,7 @@ class Env(gym.Env):
 
 	def __init__(self, df,  *args, **kwargs):
 
-		
+		pass
 
 	def seed(self,):
 		"""sets the seed for the environment
