@@ -745,14 +745,14 @@ def df2arrays(df, split: float = 0.75, shuffle: bool = False, predictorcols : li
 	"""
 
 	# 0 Shift output columns by lag time points
-	df = createlag(df, outputcols = outputcols, lag = lag)
+	df2 = createlag(df, outputcols = outputcols, lag = lag)
 
 	# rearranging the dataframe in terms of [predictorcols]+[outputcols] for better management 
-	df = df[predictorcols+outputcols]
+	#df = df[predictorcols+outputcols]
 
 	# df to array
-	X = df[predictorcols].to_numpy()
-	y = df[outputcols].to_numpy()
+	X = df.loc[df2.index,:][predictorcols].to_numpy()
+	y = df2[outputcols].to_numpy()
 
 	# 1 Scales the arrays if needed based on MinMaxScaler	
 	scaler = MinMaxScaler(feature_range=(0, 1))

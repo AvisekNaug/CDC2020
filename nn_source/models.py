@@ -5,6 +5,9 @@ from math import sqrt
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
+#from keras import backend as K
+#import tensorflow as tf
+
 from keras.models import Model
 from keras.layers import Input, Dense, LSTM, RepeatVector, Reshape, Dropout, BatchNormalization, Activation
 from keras.callbacks import TensorBoard
@@ -52,31 +55,41 @@ class lstm_model():
 
 
 	# Create the network
-	def design_model(self, lstmhiddenlayers: list = [64, 64], densehiddenlayers: list = [],
-	 dropoutlist: list = [[],[]], batchnormalizelist : list = [[],[]]):
+	def design_model(self, lstmhiddenlayers: list = [64, 64], densehiddenlayers: list = [], 
+	dropoutlist: list = [[],[]], batchnormalizelist : list = [[],[]]):
 
+		self.lstmhiddenlayers = lstmhiddenlayers
+		self.densehiddenlayers = densehiddenlayers
+		self.dropoutlist = dropoutlist
+		self.batchnormalizelist = batchnormalizelist
+		 
 		# There will be one dense layer to output the targets
-		densehiddenlayers += [self.outputdim]
+		self.densehiddenlayers += [self.outputdim]
 
 		# Checking processors
-		if not dropoutlist[0]:
-			dropoutlist[0] = [False] * (len(lstmhiddenlayers))
+		if not self.dropoutlist[0]:
+			self.dropoutlist[0] = [False] * (len(self.lstmhiddenlayers))
 		else:
-			assert len(lstmhiddenlayers)==len(dropoutlist[0]), "lstmhiddenlayers and dropoutlist[0] must be of same length"
+			assert len(self.lstmhiddenlayers)==len(self.dropoutlist[0]), "lstmhiddenlayers and dropoutlist[0] must be of same length"
 
-		if not dropoutlist[1]:
-			dropoutlist[1] = [False] * (len(densehiddenlayers))
+		if not self.dropoutlist[1]:
+			self.dropoutlist[1] = [False] * (len(self.densehiddenlayers))
 		else:
-			assert len(densehiddenlayers)==len(dropoutlist[1]), "densehiddenlayers and dropoutlist[1] must be of same length"
-		if not batchnormalizelist[0]:
-			batchnormalizelist[0] = [False] * (len(lstmhiddenlayers))
+			assert len(self.densehiddenlayers)==len(self.dropoutlist[1]), "densehiddenlayers and dropoutlist[1] must be of same length"
+		if not self.batchnormalizelist[0]:
+			self.batchnormalizelist[0] = [False] * (len(self.lstmhiddenlayers))
 		else:
-			assert len(lstmhiddenlayers)==len(batchnormalizelist[0]), "lstmhiddenlayers and batchnormalizelist[0] must be of same length"
+			assert len(self.lstmhiddenlayers)==len(self.batchnormalizelist[0]), "lstmhiddenlayers and batchnormalizelist[0] must be of same length"
 
-		if not batchnormalizelist[1]:
-			batchnormalizelist[1] = [False] * (len(densehiddenlayers))
+		if not self.batchnormalizelist[1]:
+			self.batchnormalizelist[1] = [False] * (len(self.densehiddenlayers))
 		else:
-			assert len(densehiddenlayers)==len(batchnormalizelist[1]), "lstmhiddenlayers and batchnormalizelist[1] must be of same length"
+			assert len(self.densehiddenlayers)==len(self.batchnormalizelist[1]), "lstmhiddenlayers and batchnormalizelist[1] must be of same length"
+		
+		#K.clear_session()
+		#config = tf.ConfigProto(device_count={'GPU': 1, 'CPU': 6})
+		#sess = tf.Session(config=config)
+		#K.set_session(sess)
 		
 		# Design the network
 		self.input_layer = Input(batch_shape=(None, self.input_timesteps, self.inputdim), name='input_layer')
@@ -125,6 +138,9 @@ class lstm_model():
 
 		self.reduclronplateau = ReduceLROnPlateau(monitor = 'val_loss', patience=2, cooldown = 3)
 
+		self.tbCallBack = TensorBoard(log_dir=self.saveloc+'loginfo', batch_size=self.batch_size, histogram_freq=1,
+		 write_graph=False, write_images=False, write_grads=True)
+
 	
 	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 100, saveModel: bool = False):
 
@@ -134,7 +150,7 @@ class lstm_model():
 		# train the model
 		self.history = self.model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, \
 			validation_data=(X_val, y_val) , verbose=2, shuffle=False, callbacks=[self.modelchkpoint, \
-				self.earlystopping, self.reduclronplateau])
+				self.earlystopping, self.reduclronplateau, self.tbCallBack])
 
 		if saveModel:
 			self.save_model()

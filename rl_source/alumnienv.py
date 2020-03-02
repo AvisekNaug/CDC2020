@@ -10,9 +10,9 @@ from gym.utils import seeding
 
 class Env(gym.Env):
 
-	def __init__(self, *args, **kwargs):
+	def __init__(self, df,  *args, **kwargs):
 
-		raise NotImplementedError
+		
 
 	def seed(self,):
 		"""sets the seed for the environment
