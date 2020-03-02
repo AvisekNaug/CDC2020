@@ -5,15 +5,13 @@ from math import sqrt
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-#from keras import backend as K
-#import tensorflow as tf
-
-from keras.models import Model
-from keras.layers import Input, Dense, LSTM, RepeatVector, Reshape, Dropout, BatchNormalization, Activation
-from keras.callbacks import TensorBoard
-from keras.regularizers import L1L2
-from keras.models import load_model
-from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras import backend as K
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Dense, LSTM, RepeatVector, Reshape, Dropout, BatchNormalization, Activation
+from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.regularizers import L1L2
+from tensorflow.keras.models import load_model
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 
 from dataprocess.plotutils import pred_v_target_plot
 
@@ -85,11 +83,6 @@ class lstm_model():
 			self.batchnormalizelist[1] = [False] * (len(self.densehiddenlayers))
 		else:
 			assert len(self.densehiddenlayers)==len(self.batchnormalizelist[1]), "lstmhiddenlayers and batchnormalizelist[1] must be of same length"
-		
-		#K.clear_session()
-		#config = tf.ConfigProto(device_count={'GPU': 1, 'CPU': 6})
-		#sess = tf.Session(config=config)
-		#K.set_session(sess)
 		
 		# Design the network
 		self.input_layer = Input(batch_shape=(None, self.input_timesteps, self.inputdim), name='input_layer')
