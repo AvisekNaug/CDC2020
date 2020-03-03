@@ -7,6 +7,7 @@ backcall==0.1.0
 bdx==0.2.3
 beautifulsoup4==4.8.2
 bleach==3.1.1
+blessings==1.7
 bokeh==1.4.0
 certifi==2019.11.28
 chardet==3.0.4
@@ -22,6 +23,7 @@ fsspec==0.6.2
 future==0.18.2
 gast==0.3.3
 google-pasta==0.1.8
+gpustat==0.6.0
 grpcio==1.27.2
 gym==0.16.0
 h5py==2.10.0
@@ -64,6 +66,7 @@ nbformat==5.0.4
 notebook==6.0.3
 numba==0.48.0
 numpy==1.18.1
+nvidia-ml-py3==7.352.0
 opencv-python==4.2.0.32
 packaging==20.1
 pandas==1.0.1
@@ -116,5 +119,6 @@ webencodings==0.5.1
 Werkzeug==1.0.0
 widgetsnbextension==3.5.1
 wrapt==1.11.2
+yapf==0.29.0
 zict==1.0.0
 zipp==3.0.0
