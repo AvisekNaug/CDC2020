@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 
 
 def pred_v_target_plot(timegap, outputdim, output_timesteps, preds, target,
- saveloc, scaler, lag: int = -1, outputdim_names : list = [], typeofplot: str = 'train'):
+ saveloc, scaling: bool, scaler, lag: int = -1, outputdim_names : list = [], typeofplot: str = 'train'):
 
 	if not outputdim_names:
 		outputdim_names = ['Output']*outputdim
@@ -14,9 +14,10 @@ def pred_v_target_plot(timegap, outputdim, output_timesteps, preds, target,
 	plt.rc('legend',**{'fontsize':14})
 
 	# Inerse scaling the data for each time step
-	for j in  range(output_timesteps):
-		preds[:,j,:] = scaler.inverse_transform(preds[:,j,:])
-		target[:,j,:] = scaler.inverse_transform(target[:,j,:])
+	if scaling:
+		for j in  range(output_timesteps):
+			preds[:,j,:] = scaler.inverse_transform(preds[:,j,:])
+			target[:,j,:] = scaler.inverse_transform(target[:,j,:])
 
 
 	# training output
