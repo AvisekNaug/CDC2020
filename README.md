@@ -14,7 +14,7 @@ python3.6 -m venv cdc2020
 
 Install requirements
 ```
-pip install requirements.txt
+pip install minimalrequirements.txt
 ```
 
 
