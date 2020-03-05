@@ -9,3 +9,4 @@ buildingdata.pkl
 __pycache__
 .ipynb_checkpoints
 results/lstmtrain
+localplotutils.py
