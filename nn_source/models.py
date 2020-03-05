@@ -160,7 +160,7 @@ class lstm_model():
 
 			self.model.save(self.saveloc+'LSTM_model_{:02d}epochs.hdf5'.format(self.epochs))
 
-	def evaluate_model(self, X_train, y_train, X_test, y_test, y_sc, saveplot: bool = False, Week: int = 0,
+	def evaluate_model(self, X_train, y_train, X_test, y_test, y_sc, scaling: bool = True, saveplot: bool = False, Week: int = 0,
 	 lag: int = -1, outputdim_names = ['TotalEnergy']):
 	
 
@@ -192,11 +192,11 @@ class lstm_model():
 		if saveplot:
 
 			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
-			 self.preds_train, y_train, self.saveloc, y_sc, lag = -1, outputdim_names = outputdim_names,
+			 self.preds_train, y_train, self.saveloc, scaling, y_sc, lag = -1, outputdim_names = outputdim_names,
 			 typeofplot="train")
 
 			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
-			 self.preds_test, y_test, self.saveloc, y_sc, lag = -1, outputdim_names = outputdim_names,
+			 self.preds_test, y_test, self.saveloc, scaling, y_sc, lag = -1, outputdim_names = outputdim_names,
 			 typeofplot="test")
 
 		return [self.preds_train, self.preds_test]
