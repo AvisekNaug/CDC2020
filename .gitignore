@@ -1,5 +1,6 @@
 /data/raw
 vrf.pkl
+buildingdata.pkl
 /log
 /.ipynb_checkpoints
 /.vscode
