@@ -721,7 +721,7 @@ def createlag(df, outputcols: list, lag: int = -1):
 
 
 def df2arrays(df, split: float = 0.75, shuffle: bool = False, predictorcols : list = [], outputcols: list = [], \
- lag: int = -1, scaling : bool = False, reshaping : bool = True, input_timesteps: int = 1, output_timesteps: int = 1):
+ lag: int = -1, scaling : bool = False, feature_range = (0,1), reshaping : bool = True, input_timesteps: int = 1, output_timesteps: int = 1):
 	"""
 	0 Shift output columns up by lag time points
 	1 Scales the arrays if needed based on MinMaxScaler
@@ -755,7 +755,7 @@ def df2arrays(df, split: float = 0.75, shuffle: bool = False, predictorcols : li
 	y = df2[outputcols].to_numpy()
 
 	# 1 Scales the arrays if needed based on MinMaxScaler	
-	scaler = MinMaxScaler(feature_range=(0, 1))
+	scaler = MinMaxScaler(feature_range=feature_range)
 	X_scaler = scaler.fit(X)
 	y_scaler = scaler.fit(y)
 	if scaling:
