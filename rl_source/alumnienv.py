@@ -77,6 +77,10 @@ class Env(gym.Env):
 		self.test_data_limit = self.nrows
 		# episode_length: dictates number of steps in an episode
 		self.episode_length = self.train_data_limit
+		# Used to store the old historical action for comparison
+		self.hist_a = None
+		# Information about the reward params
+		self.params = kwargs
 		'''End: Requirements for our own environment'''
 
 
@@ -108,7 +112,7 @@ class Env(gym.Env):
 		else:
 			self.dataptr = self.dataptr + 1 if self.dataptr < self.test_data_limit - 1 else self.train_data_limit
 
-		# step to the next state and get new observation
+		# step to the next state and get new observation and processed action
 		self.s_next, a = self.state_transition(self.s, a)
 
 		# calculate reward and collect information for "info" dinctionary
@@ -134,10 +138,13 @@ class Env(gym.Env):
 		"""
 
 		# process control action
-		a = self.process_action(a, s)
+		a = self.process_action(s, a)
 
 		# Helps iterate through the data file. This is not the actual observation
 		self.row = self.df.iloc[[self.dataptr],:].copy()
+
+		# cache the old action before removing it
+		self.hist_a = self.row.loc[:,self.action_space_vars].copy().to_numpy().flatten()
 
 		# Update historical action cells with actual agent action values
 		self.row.loc[:,self.action_space_vars] = a
@@ -146,43 +153,42 @@ class Env(gym.Env):
 		return self.row.loc[:, self.obs_space_vars], a
 
 
-	def process_action(self, a, s):
-		"""Custom action processer
-		"""
-		# Action variable upper and lower bounds for the dataframe provided
-		a_lowerbound = self.stats.loc['min', self.action_space_vars].to_numpy().flatten()
-		a_upperbound = self.stats.loc['max', self.action_space_vars].to_numpy().flatten()
-
-		#  Scale action differential from gym space to 0-1 scaled space
-		a = a/(a_upperbound - a_lowerbound)
-
-		# Supply Temperature at previous state
-		previous_sat = s.loc[s.index[0], self.action_space_vars].to_numpy().flatten()
-
-		# new action: previous state + new action differential
-		a += previous_sat
-
-		# clip action
-		a = np.clip(a, a_lowerbound, a_upperbound)
-
-		return a
-
-
-	def reward_calculation(self, s, a, _, *args, **kwargs):
+	def reward_calculation(self, s, a, _):
 		"""Custom Reward Calculator
 		"""
 
-		# calculate energy for the next time step
-		energy = 1*self.energy_cost(s, a)
+		'''Energy reward'''
+		# calculate rl based energy for the this time step
+		rl_energy = self.energy_cost(s, a)
+		# historical energy for this time step
+		hist_energy = self.energy_cost(s, self.hist_a)
+		# 'energy_saved' reward if at least 'energy_savings_thresh' energy saved else 'energy_penalty' reward
+		reward_energy = self.params['energy_saved'] if hist_energy-rl_energy>self.params['energy_savings_thresh'] \
+			else self.params['energy_penalty']
+		# reward_energy *= self.params['energy_reward_weight']  # don't weight it so that we can try ad hoc weights
 
-		reward = -energy
+		'''Comfort Reward'''
+		# exrtact rl discharge air temeprature
+		T_rl_disch = a[0]
+		# extract vrf average setpoint temperature
+		avg_vrf_stpt = s.loc[s.index[0], 'avg_stpt']
+		# 'comfort' reward if T_rl_disch close to avg_vrf_stpt by 'comfort_thresh' else 'uncomfort' reward
+		reward_comfort = self.params['comfort'] if abs(T_rl_disch-avg_vrf_stpt) < self.params['comfort_thresh'] \
+			else self.params['uncomfortable']
+		# reward_comfort *= self.params['comfort_reward_weight']  # don't weight it so that we can try ad hoc weights
+
+		reward = self.params['energy_reward_weight']*reward_energy + self.params['comfort_reward_weight']*reward_comfort
 
 		if self.testing:
 			step_info = {'time': str(s.index[0]),
-						'energy': energy,
+						'energy': rl_energy,
+						'baseline_energy':hist_energy,
+						'reward_energy': reward_energy,
+						'reward_comfort': reward_comfort,
 						'oat': s.loc[s.index[0], 'oat'],
 						'orh': s.loc[s.index[0], 'orh'],
-						'rl_sat': s.loc[s.index[0], 'sat'],
+						# 'rl_sat': s.loc[s.index[0], 'sat'],
+						'T_rl_disch': T_rl_disch,
 						'avg_stpt': s.loc[s.index[0], 'avg_stpt']
 						}
 		else:
@@ -207,6 +213,31 @@ class Env(gym.Env):
 
 		return float(self.model.predict(in_obs, batch_size=1).flatten())
 
-	def testenv(self):
+	def process_action(self, s, a):
+		"""Custom action processer
+		"""
+		# Action variable upper and lower bounds for the dataframe provided
+		a_lowerbound = self.stats.loc['min', self.action_space_vars].to_numpy().flatten()
+		a_upperbound = self.stats.loc['max', self.action_space_vars].to_numpy().flatten()
+
+		#  Scale action differential from gym space(which is also raw data space) to scaled space
+		a = a/(self.params['action_minmax'][1] - self.params['action_minmax'][0])
+
+		# Supply Temperature at previous state
+		previous_sat = s.loc[s.index[0], self.action_space_vars].to_numpy().flatten()
+
+		# new action: previous state + new action differential
+		a += previous_sat
+
+		# clip action
+		a = np.clip(a, a_lowerbound, a_upperbound)
+
+		return a
+
+	def testenv(self,):
 		self.testing = True
 		self.dataptr = self.train_data_limit
+
+	def trainenv(self,):
+		self.testing = False
+		self.dataptr = 0
