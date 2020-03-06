@@ -16,8 +16,6 @@ class Env(gym.Env):
 				 action_space_vars : list,
 				 action_space_bounds: list, 
 				 energy_model, model_input_shape, model_input_vars,
-				 *args,
-				#  spacelb: np.ndarray = np.array([]), spaceub: np.ndarray = np.array([]),
 				 slicepoint = 0.75,
 				 **kwargs):
 
@@ -82,12 +80,6 @@ class Env(gym.Env):
 		# Information about the reward params
 		self.params = kwargs
 		'''End: Requirements for our own environment'''
-
-
-	def seed(self,):
-		"""sets the seed for the environment
-		"""
-		self.np_random, seed = seeding.np_random(seed)
 
 
 	def reset(self,):
@@ -213,6 +205,7 @@ class Env(gym.Env):
 
 		return float(self.model.predict(in_obs, batch_size=1).flatten())
 
+
 	def process_action(self, s, a):
 		"""Custom action processer
 		"""
@@ -234,9 +227,11 @@ class Env(gym.Env):
 
 		return a
 
+
 	def testenv(self,):
 		self.testing = True
 		self.dataptr = self.train_data_limit
+
 
 	def trainenv(self,):
 		self.testing = False
