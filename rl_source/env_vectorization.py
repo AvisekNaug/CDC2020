@@ -18,10 +18,10 @@ with warnings.catch_warnings():
 
 	warnings.filterwarnings("ignore",category=FutureWarning)
 
+	# needed to prevent OOM error
 	import tensorflow as tf
 	config = tf.ConfigProto(log_device_placement=True)
-	config.gpu_options.allow_growth = True
-	#config = tf.ConfigProto(device_count={'CPU' : 4, 'GPU' : 0}, allow_soft_placement=False, log_device_placement=True)
+	config.gpu_options.allow_growth = True  # pylint: disable=no-member
 	session = tf.Session(config=config)
 	
 	from keras.models import load_model
