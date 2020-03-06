@@ -1,4 +1,6 @@
-# including the project directory to the notebook level
+"""
+The scipt shows how to wrap custom gym environment with SubprocVecEnv for PPO multiprocessing
+"""
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import sys
