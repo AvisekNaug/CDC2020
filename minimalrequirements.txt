@@ -7,5 +7,4 @@ scipy==1.4.1
 pandas==1.0.1
 Keras==2.2.4
 scikit_learn==0.22.2.post1
-tensorflow==2.1.0
 notebook
