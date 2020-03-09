@@ -142,18 +142,20 @@ class lstm_model():
 		 write_graph=False, write_images=False, write_grads=True)
 
 	
-	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 100, saveModel: bool = False):
+	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 100, saveModel: bool = False, initial_epoch = 0):
 
 		# Number of epochs to run
 		self.epochs = epochs
 
 		# train the model
 		self.history = self.model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, \
-			validation_data=(X_val, y_val) , verbose=2, shuffle=False, callbacks=[self.modelchkpoint, \
+			validation_data=(X_val, y_val) , verbose=0, shuffle=False,initial_epoch = initial_epoch, callbacks=[self.modelchkpoint, \
 				self.earlystopping, self.reduclronplateau, self.tbCallBack])
 
 		if saveModel:
 			self.save_model()
+
+		return self.history
 
 
 	def save_model(self,):
@@ -176,8 +178,7 @@ class lstm_model():
 				cvrmse = 100*(rmse/np.mean(y_train[:, j, i]))
 				mae = mean_absolute_error(self.preds_train[:, j, i], y_train[:, j, i])
 				file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','a')
-				file.write('Week No:{}-Time Step {}: Train RMSE={} |Train CVRMSE={} \
-					|Train MAE={} \n'.format(Week,j+1, rmse, cvrmse, mae))
+				file.write('Week No:{}-Time Step {}: Train RMSE={} |Train CVRMSE={} |Train MAE={}\n'.format(Week,j+1, rmse, cvrmse, mae))
 				file.close()
 
 				# log error on test data
@@ -185,18 +186,17 @@ class lstm_model():
 				cvrmse = 100*(rmse/np.mean(y_test[:, j, i]))
 				mae = mean_absolute_error(self.preds_test[:, j, i], y_test[:, j, i])
 				file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','a')
-				file.write('Week No:{}-Time Step {}: Test RMSE={} |Test CVRMSE={} \
-					|Test MAE={} \n'.format(Week,j+1, rmse, cvrmse, mae))
+				file.write('Week No:{}-Time Step {}: Test RMSE={} |Test CVRMSE={} |Test MAE={}\n'.format(Week,j+1, rmse, cvrmse, mae))
 				file.close()
 
 		if saveplot:
 
 			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
 			 self.preds_train, y_train, self.saveloc, scaling, y_sc, lag = -1, outputdim_names = outputdim_names,
-			 typeofplot="train")
+			 typeofplot="train",Week=Week)
 
 			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
 			 self.preds_test, y_test, self.saveloc, scaling, y_sc, lag = -1, outputdim_names = outputdim_names,
-			 typeofplot="test")
+			 typeofplot="test",Week=Week)
 
 		return [self.preds_train, self.preds_test]
