@@ -7,6 +7,6 @@ vrf.pkl
 *.pyc
 __pycache__
 .ipynb_checkpoints
-results/lstmtrain
+results
 localplotutils.py
 Understanding StableBaselines PPO.ipynb
