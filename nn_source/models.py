@@ -119,7 +119,7 @@ class lstm_model():
 		self.reduclronplateau = ReduceLROnPlateau(monitor = 'val_loss', patience=2, cooldown = 3)
 
 	
-	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 200):
+	def train_model(self, X_train, y_train, X_val, y_val, initial_epoch = 0, epochs: int = 200):
 
 		# Number of epochs to run
 		self.epochs = epochs
@@ -127,7 +127,9 @@ class lstm_model():
 		# train the model
 		self.history = self.model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, \
 			validation_data=(X_val, y_val) , verbose=0, shuffle=False, callbacks=[self.earlystopping, \
-				self.reduclronplateau])
+				self.reduclronplateau], initial_epoch=initial_epoch)
+
+		return self.history
 
 	def evaluate_model(self, X_train, y_train, X_test, y_test):
 	
