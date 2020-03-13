@@ -84,7 +84,7 @@ class lstm_model():
 		# LSTM layers
 		for no_units, dropout, normalize in zip(lstmhiddenlayers, dropoutlist[0], batchnormalizelist[0]):
 
-			self.out = LSTM(no_units, return_sequences=True, recurrent_regularizer=self.regularizers, stateful = self.stateful)(self.out)
+			self.out = LSTM(no_units, return_sequences=True, stateful = self.stateful)(self.out)
 
 			if dropout:
 				self.out = Dropout(0.2)(self.out)
@@ -93,7 +93,7 @@ class lstm_model():
 				self.out = BatchNormalization()(self.out)
 
 		# Dense layers
-		activationlist = ['relu']*(len(densehiddenlayers)-1) + ['linear']  # relu activation for all dense layers exept last
+		activationlist = ['linear']*(len(densehiddenlayers)-1) + ['linear']  # relu activation for all dense layers exept last
 		for no_units, dropout, normalize, activation in zip(densehiddenlayers, dropoutlist[1], batchnormalizelist[1], activationlist):
 
 			self.out = Dense(no_units, activation=activation)(self.out)
