@@ -50,7 +50,7 @@ class lstm_model():
 		# create a file to log the error
 		if not self.saveloc.endswith('/'):  # attach forward slash if saveloc does not have one
 			self.saveloc += '/'
-		file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','w')
+		file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','a')
 		file.close()
 
 
@@ -110,7 +110,7 @@ class lstm_model():
 				self.out = BatchNormalization()(self.out)
 
 		# Dense layers
-		activationlist = ['relu']*(len(densehiddenlayers)-1) + ['linear']  # relu activation for all dense layers exept last
+		activationlist = ['linear']*(len(densehiddenlayers)-1) + ['linear']  # relu activation for all dense layers exept last
 		for no_units, dropout, normalize, activation in zip(densehiddenlayers, dropoutlist[1], batchnormalizelist[1], activationlist):
 
 			self.out = Dense(no_units, activation=activation)(self.out)
