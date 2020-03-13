@@ -101,7 +101,7 @@ class lstm_model():
 		# LSTM layers
 		for no_units, dropout, normalize in zip(lstmhiddenlayers, dropoutlist[0], batchnormalizelist[0]):
 
-			self.out = LSTM(no_units, return_sequences=True, recurrent_regularizer=self.regularizers, stateful = self.stateful)(self.out)
+			self.out = LSTM(no_units, return_sequences=True, stateful = self.stateful)(self.out)  # recurrent_regularizer=self.regularizers,
 
 			if dropout:
 				self.out = Dropout(0.2)(self.out)
@@ -134,7 +134,7 @@ class lstm_model():
 		self.modelchkpoint = ModelCheckpoint(self.saveloc+'LSTM_model_{epoch:02d}_{val_loss:.2f}',
 		 monitor = 'val_loss', save_best_only = True, period=2)
 
-		self.earlystopping = EarlyStopping(monitor = 'val_loss', patience=5, restore_best_weights=True)
+		self.earlystopping = EarlyStopping(monitor = 'val_loss', patience=8, restore_best_weights=True)
 
 		self.reduclronplateau = ReduceLROnPlateau(monitor = 'val_loss', patience=2, cooldown = 3)
 
