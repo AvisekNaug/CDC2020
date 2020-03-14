@@ -467,7 +467,7 @@ def dfsmoothing(df, column_names: list = [], Wn = 0.015):
 		pd.DataFrame -- smoothed data frame
 	"""
 
-	if column_names:
+	if not column_names:
 
 		return df
 
