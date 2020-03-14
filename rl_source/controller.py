@@ -12,8 +12,8 @@ def get_agent(env):
 
 	# Custom MLP policy
 	policy_net_kwargs = dict(act_fun=tf.nn.tanh,
-						net_arch=[dict(pi=[16, 16, 16, 16], 
-						vf=[16, 16, 16, 16])])
+						net_arch=[dict(pi=[64, 64], 
+						vf=[64, 64])])
 
 	# Create the agent
 	agent = PPO2("MlpPolicy", 
@@ -23,12 +23,12 @@ def get_agent(env):
 
 	return agent
 
-def train_agent(agent, env=None, steps=30000):
+def train_agent(agent, env=None, steps=30000, tb_log_name = "../log/ppo2_event_folder"):
 	"""
 	Train the agent on the environment
 	"""
 	agent.set_env(env)
-	trained_model = agent.learn(total_timesteps=steps, callback=CustomCallBack, tb_log_name="../log/ppo2_event_folder")
+	trained_model = agent.learn(total_timesteps=steps, callback=CustomCallBack, tb_log_name=tb_log_name)
 
 	return trained_model
 
@@ -74,3 +74,48 @@ def CustomCallBack(_locals, _globals):
 		n_steps += 1
 
 	return True
+
+def test_agent(agent_weight_path: str, env, num_episodes = 1):
+
+	# load agent weights
+	agent = PPO2.load(agent_weight_path, 
+					env)
+	
+	# create the class which will help store the performance metrics
+	perf_metrics = performancemetrics()
+
+	for _ in range(num_episodes):
+		perf_metrics.on_episode_begin()
+		obs = env.reset()
+		dones = False
+		while not dones:
+			action, _ = agent.predict(obs)
+			obs, _, dones, info = env.step(action)
+			perf_metrics.on_step_end(info)
+			# TODO: fix for multiprocess environments
+		perf_metrics.on_episode_end()
+
+	return perf_metrics
+
+class performancemetrics():
+	"""
+	Store the history of performance metrics. Useful for evaluating the
+	agent's performance:
+	"""
+
+	def __init__(self):
+		self.metrics = []  # store perf metrics for each episode
+		self.metric = {}
+
+	def on_episode_begin(self):
+		self.metric = {}  # store performance metrics
+
+	def on_episode_end(self):
+		self.metrics.append(self.metric)
+
+	def on_step_end(self, info):
+		for key, value in info.items():
+			if key in self.metric:
+				self.metric[key].append(value)
+			else:
+				self.metric[key] = [value]
