@@ -27,7 +27,7 @@ with warnings.catch_warnings():
 	from keras.models import load_model
 	from nn_source import models as mp
 	from rl_source import alumnienv
-	from stable_baselines.common.vec_env import SubprocVecEnv
+	from stable_baselines.common.vec_env import SubprocVecEnv, DummyVecEnv
 	from stable_baselines.common import set_global_seeds, make_vec_env
 
 from dataprocess import dataprocessor as dp
@@ -73,10 +73,10 @@ if __name__ == '__main__':
 	seed = 123  # the initial seed for the random number generator
 	start_index = 0  # start rank index
 	monitor_dir = '../log/'  # Path to a folder where the monitor files will be saved
-	vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
+	vec_env_cls = DummyVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
 	env_kwargs = dict(  #  Optional keyword argument to pass to the env constructor
 		df=dfscaled,  # the file for iterating
-		obs_space_vars=['oat', 'orh', 'ghi', 'sat', 'avg_stpt'],  # state space variable
+		obs_space_vars=['oat', 'orh', 'ghi', 'sat', 'flow', 'avg_stpt'],  # state space variable
 		action_space_vars=['sat'],  # action space variable
 		action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the params
 		energy_model=energymodel,  # trained lstm model
