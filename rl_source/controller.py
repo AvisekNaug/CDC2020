@@ -68,34 +68,34 @@ def CustomCallBack(_locals, _globals):
 		self_is_tb_set = True  # pylint: disable=unused-variable
 
 	# Print stats every 1000 calls, since for PPO it is called at every n_step
-	if (n_steps + 1) % 500 == 0:
+	# TODO: make call num_envs agnostic
+	if (n_steps) % 1000 == 0:
 		# Evaluate policy training performance
-		if np.any(_locals['masks']):  # if the current update step contains episode termination
-			# x, y = ts2xy(load_results(self_.monitor_log_dir), 'episodes')
+		# if np.any(_locals['masks']):  # if the current update step contains episode termination
 			# prepare csv files to look into
-			x_list = []
-			y_list = []
-			for env_id in range(self_.env.num_envs):
-				monitor_files = glob.glob(self_.monitor_log_dir+'**/'+str(env_id)+'.monitor.csv')
-				x, y = ts2xy(custom_load_results(monitor_files), 'episodes')
-				x_list.append(x)
-				y_list.append(y)
+		x_list = []
+		y_list = []
+		for env_id in range(self_.env.num_envs):
+			monitor_files = glob.glob(self_.monitor_log_dir+'**/'+str(env_id)+'.monitor.csv')
+			x, y = ts2xy(custom_load_results(monitor_files), 'episodes')
+			x_list.append(x)
+			y_list.append(y)
 
-			# all environments have at least one episode data row in monitor.csv
-			if all([len(x) > 0 for x in x_list]):  
-				# Average across all environments in one go by using None
-				mean_reward = np.mean(np.array(y_list)[-5:,:], axis = None)
-				# Average across all environments in one go by using None
-				print('An average of {} episodes completed'.format(np.mean(np.array(x_list)[-1,:], axis = None)[-1]))
-				# Compare Reward
-				print("Best mean reward: {:.2f} - Latest 5 sample mean reward per episode: {:.2f}".format(best_mean_reward, mean_reward))
-				# New best model, you could save the agent here
-				if mean_reward > best_mean_reward:
-					best_mean_reward = mean_reward
-					# Example for saving best model
-					print("Saving new best model")
-					self_.save(self_.model_save_dir + 'best_model.pkl')
-		n_steps += 1
+		# all environments have at least one episode data row in monitor.csv
+		if all([len(x) > 0 for x in x_list]):  
+			# Average across all environments in one go by using None
+			mean_reward = np.mean(np.array(y_list)[-5:,:], axis = None)
+			# Average across all environments in one go by using None
+			print('An average of {} episodes completed'.format(np.mean(np.array(x_list)[-1,:], axis = None)[-1]))
+			# Compare Reward
+			print("Best mean reward: {:.2f} - Latest 5 sample mean reward per episode: {:.2f}".format(best_mean_reward, mean_reward))
+			# New best model, you could save the agent here
+			if mean_reward > best_mean_reward:
+				best_mean_reward = mean_reward
+				# Example for saving best model
+				print("Saving new best model")
+				self_.save(self_.model_save_dir + 'best_model.pkl')
+	n_steps += self_.env.num_envs
 
 	return True
 

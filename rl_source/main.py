@@ -66,6 +66,7 @@ if __name__ == '__main__':
 	# Arguments to be fed to the make_vec_env
 	env_id = alumnienv.Env  # the environment ID or the environment class
 	n_envs = 2  # can also be os.cpu_count()
+	"""always make sure that the number of environments is even"""
 	seed = 123  # the initial seed for the random number generator
 	start_index = 0  # start rank index
 	monitor_dir = '../log/Trial_{}/Interval_{}/'.format(1,1)  # Path to a folder where the monitor files will be saved
