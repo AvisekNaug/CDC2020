@@ -10,3 +10,5 @@ __pycache__
 results
 localplotutils.py
 Understanding StableBaselines PPO.ipynb
+testfile.py
+globalparams.py
