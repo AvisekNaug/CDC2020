@@ -65,7 +65,7 @@ def CustomCallBack(_locals, _globals):
 		"""Do some stuff here for setting up logging: eg tb_log the weights"""
 
 		# reverse the key
-		self_is_tb_set = True
+		self_is_tb_set = True  # pylint: disable=unused-variable
 
 	# Print stats every 1000 calls, since for PPO it is called at every n_step
 	if (n_steps + 1) % 500 == 0:
