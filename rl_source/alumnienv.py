@@ -33,7 +33,7 @@ class Env(gym.Env):
 		# the observation space variable names list
 		self.obs_space_vars = obs_space_vars
 		# the action space variables names list
-		self.action_space_vars = action_space_vars 
+		self.action_space_vars = action_space_vars
 
 
 		'''Begin: standard requirements for interfacing with gym environments'''
