@@ -1,8 +1,14 @@
+import os
 import numpy as np
+import glob
+
+import csv
+import json
+import pandas as pd
 
 import tensorflow as tf
 from stable_baselines import PPO2
-from stable_baselines.results_plotter import load_results, ts2xy
+from stable_baselines.results_plotter import ts2xy
 
 # current best mean reward
 best_mean_reward = -np.inf
@@ -10,7 +16,9 @@ best_mean_reward = -np.inf
 n_steps = 0
 
 
-def get_agent(env, model_save_dir = '../models/controller/', monitor_logdir = '../log/'):
+def get_agent(env,
+			 model_save_dir = '../models/controller/', 
+			 monitor_log_dir = '../log/Trial_0/'):
 	"""
 	The Proximal Policy Optimization algorithm combines ideas from A2C
 	(having multiple workers) and TRPO (it uses a trust region to improve the actor)
@@ -29,7 +37,7 @@ def get_agent(env, model_save_dir = '../models/controller/', monitor_logdir = '.
 
 	agent.is_tb_set = False  # attribute for callback
 	agent.model_save_dir = model_save_dir  # load or save model here
-	agent.monitor_logdir = monitor_logdir  # logging directory
+	agent.monitor_logdir = monitor_log_dir  # logging directory for current Trial
 
 	return agent
 
@@ -54,20 +62,32 @@ def CustomCallBack(_locals, _globals):
 	if not self_.is_tb_set:
 		# Do some initial logging setup
 
-		"""Do some stuff here for setting up logging: eg log the weights"""
+		"""Do some stuff here for setting up logging: eg tb_log the weights"""
 
 		# reverse the key
 		self_is_tb_set = True
 
 	# Print stats every 1000 calls, since for PPO it is called at every n_step
-	if (n_steps + 1) % 100 == 0:
+	if (n_steps + 1) % 500 == 0:
 		# Evaluate policy training performance
 		if np.any(_locals['masks']):  # if the current update step contains episode termination
-			x, y = ts2xy(load_results(self_.monitor_logdir), 'episodes')
-			#TODO: design different reader for reward data
-			if len(x) > 0:
-				mean_reward = np.mean(y[-5:])
-				print(x[-1], 'timesteps')
+			# x, y = ts2xy(load_results(self_.monitor_log_dir), 'episodes')
+			# prepare csv files to look into
+			x_list = []
+			y_list = []
+			for env_id in range(self_.env.num_envs):
+				monitor_files = glob.glob(self_.monitor_log_dir+'**/'+str(env_id)+'.monitor.csv')
+				x, y = ts2xy(custom_load_results(monitor_files), 'episodes')
+				x_list.append(x)
+				y_list.append(y)
+
+			# all environments have at least one episode data row in monitor.csv
+			if all([len(x) > 0 for x in x_list]):  
+				# Average across all environments in one go by using None
+				mean_reward = np.mean(np.array(y_list)[-5:,:], axis = None)
+				# Average across all environments in one go by using None
+				print('An average of {} episodes completed'.format(np.mean(np.array(x_list)[-1,:], axis = None)[-1]))
+				# Compare Reward
 				print("Best mean reward: {:.2f} - Latest 5 sample mean reward per episode: {:.2f}".format(best_mean_reward, mean_reward))
 				# New best model, you could save the agent here
 				if mean_reward > best_mean_reward:
@@ -113,6 +133,9 @@ def test_agent(agent_weight_path: str, env, num_episodes = 1):
 			# update dones_trace with new episode end information
 			dones_trace = [i | j for i,j in zip(dones_trace,doneslist)]
 
+			# update all_done
+			all_done = all(dones_trace)
+
 			for idx, done in enumerate(dones_trace):
 				if not done:
 					perf_metrics_list[idx].on_step_end(infotuple[idx])  # log the info dictionary
@@ -144,3 +167,42 @@ class performancemetrics():
 				self.metric[key].append(value)
 			else:
 				self.metric[key] = [value]
+
+def custom_load_results(monitor_files : list):
+    """
+    Load all Monitor logs for a given environment across multiple intervals
+
+    :param path: (list) the list of relative log file paths
+    :return: (Pandas DataFrame) the logged data
+    """
+	# Changes: remove path and introduce relative file path lists
+	# Changes: do not sort on time as new environmnet is not time sensitive
+    data_frames = []
+    headers = []
+    for file_name in monitor_files:
+        with open(file_name, 'rt') as file_handler:
+            if file_name.endswith('csv'):
+                first_line = file_handler.readline()
+                assert first_line[0] == '#'
+                header = json.loads(first_line[1:])
+                data_frame = pd.read_csv(file_handler, index_col=None)
+                headers.append(header)
+            elif file_name.endswith('json'):  # Deprecated json format
+                episodes = []
+                lines = file_handler.readlines()
+                header = json.loads(lines[0])
+                headers.append(header)
+                for line in lines[1:]:
+                    episode = json.loads(line)
+                    episodes.append(episode)
+                data_frame = pd.DataFrame(episodes)
+            else:
+                assert 0, 'unreachable'
+            data_frame['t'] += header['t_start']
+        data_frames.append(data_frame)
+    data_frame = pd.concat(data_frames)
+    # data_frame.sort_values('t', inplace=True)
+    data_frame.reset_index(inplace=True)
+    data_frame['t'] -= min(header['t_start'] for header in headers)
+    # data_frame.headers = headers  # HACK to preserve backwards compatibility
+    return data_frame

@@ -33,103 +33,97 @@ with warnings.catch_warnings():
 # wrap the environment in the vectorzied wrapper with SubprocVecEnv
 # run the environment inside if __name__ == '__main__':
 
-	if __name__ == '__main__':
-	
-		# read the pickled file for ahu data
-		dfdata = dp.readfile('../data/processed/buildingdata.pkl')
+if __name__ == '__main__':
 
-		# return pickled df
-		df = dfdata.return_df(processmethods=['file2df'])
+	# read the pickled file for ahu data
+	dfdata = dp.readfile('../data/processed/buildingdata.pkl')
 
-		# 0-1 Scale the dataframe before sending it to the environment
-		scaler = MinMaxScaler(feature_range=(0,1))
-		dfscaler = scaler.fit(df)
+	# return pickled df
+	df = dfdata.return_df(processmethods=['file2df'])
 
-		dfscaled = DataFrame(dfscaler.fit_transform(df), index=df.index, columns=df.columns)
+	# 0-1 Scale the dataframe before sending it to the environment
+	scaler = MinMaxScaler(feature_range=(0,1))
+	dfscaler = scaler.fit(df)
 
-		# load energy model
-		energymodel = load_model('../results/lstm/LSTM_model_360_0.01')  # Specify the path where energy is stored
+	dfscaled = DataFrame(dfscaler.fit_transform(df), index=df.index, columns=df.columns)
 
-		# important parameters to scale the reward
-		params = {
-			'energy_saved': 1.0,
-			'energy_savings_thresh': 0.0,
-			'energy_penalty': -1.0,
-			'energy_reward_weight': 1.0,
-			'comfort': 1.0,
-			'comfort_thresh': 0.10,
-			'uncomfortable': -1.0,
-			'comfort_reward_weight': 1.0,
-			'action_minmax': [np.array([df.sat.min()]), np.array([df.sat.max()])]
-		}
+	# load energy model
+	energymodel = load_model('../results/lstm/LSTM_model_360_0.01')  # Specify the path where energy model is stored
 
-		# Arguments to be fed to the make_vec_env
+	# important parameters to scale the reward
+	params = {
+		'energy_saved': 1.0,
+		'energy_savings_thresh': 0.0,
+		'energy_penalty': -1.0,
+		'energy_reward_weight': 0.5,
+		'comfort': 1.0,
+		'comfort_thresh': 0.10,
+		'uncomfortable': -1.0,
+		'comfort_reward_weight': 0.5,
+		'action_minmax': [np.array([df.sat.min()]), np.array([df.sat.max()])]
+	}
 
-		env_id = alumnienv.Env  # the environment ID or the environment class
+	# Arguments to be fed to the make_vec_env
+	env_id = alumnienv.Env  # the environment ID or the environment class
+	n_envs = 2  # can also be os.cpu_count()
+	seed = 123  # the initial seed for the random number generator
+	start_index = 0  # start rank index
+	monitor_dir = '../log/Trial_{}/Interval_{}'.format(0,3)  # Path to a folder where the monitor files will be saved
+	vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
 
-		n_envs = 2  # can also be os.cpu_count()
+	env_kwargs = dict(  #  Optional keyword argument to pass to the env constructor
+		df=dfscaled,  # the file for iterating
+		obs_space_vars=['oat', 'orh', 'ghi', 'sat', 'avg_stpt', 'flow'],  # state space variable
+		action_space_vars=['sat'],  # action space variable
+		action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the params
+		energy_model=energymodel,  # trained lstm model
+		model_input_shape=(1, 1, 5),  # lstm model input data shape (no_samples, output_timestep, inputdim)
+		model_input_vars=['oat', 'orh', 'sat', 'ghi', 'flow'],  # lstm model input variables
+		**params  # the reward adjustment parameters
+	)
 
-		seed = 123  # the initial seed for the random number generator
+	envmodel = make_vec_env(env_id = env_id,
+					n_envs = n_envs,
+					seed = seed,
+					start_index = start_index,
+					monitor_dir = monitor_dir,
+					vec_env_cls = vec_env_cls,
+					env_kwargs = env_kwargs)
 
-		start_index = 0  # start rank index
-
-		monitor_dir = '../log/'  # Path to a folder where the monitor files will be saved
-
-		vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
-
-		env_kwargs = dict(  #  Optional keyword argument to pass to the env constructor
-			df=dfscaled,  # the file for iterating
-			obs_space_vars=['oat', 'orh', 'ghi', 'sat', 'avg_stpt', 'flow'],  # state space variable
-			action_space_vars=['sat'],  # action space variable
-			action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the params
-			energy_model=energymodel,  # trained lstm model
-			model_input_shape=(1, 1, 5),  # lstm model input data shape (no_samples, output_timestep, inputdim)
-			model_input_vars=['oat', 'orh', 'sat', 'ghi', 'flow'],  # lstm model input variables
-			**params  # the reward adjustment parameters
-		)
-
-		envmodel = make_vec_env(env_id = env_id,
-						n_envs = n_envs,
-						seed = seed,
-						start_index = start_index,
-						# monitor_dir = monitor_dir,
-						vec_env_cls = vec_env_cls,
-						env_kwargs = env_kwargs)
-
-		# try the environment
+	# try the environment
 
 
+	# make sure environment is in train mode
+	print("setting train env mode..... \n")
+	envmodel.env_method('trainenv')
 
-		# make sure environment is in train mode
-		print("setting train env mode..... \n")
-		envmodel.env_method('trainenv')
+	# resest environment
+	print("Reset env in train mode... \n")
+	out = envmodel.reset()  # env_method('reset')
+	print('reset in train mode: {} \n'.format(out))
 
-		# resest environment
-		print("Reset env in train mode... \n")
-		out = envmodel.reset()  # env_method('reset')
-		print('reset in train mode: {} \n'.format(out))
-
+	for _ in range(150):
 		# Step through the environment eg apply a change of 0.43*F in the up direction
 		print("executing train step..... \n")
 		obs, rewards, dones, info = envmodel.step(np.array([0.43]*n_envs))
 		#out2a,out2b = envmodel.env_method( 'step', (np.array([0.43])) )
-		print("In train mode obs:{}, \n rewards:{}, \n dones:{}, \n info:{} \n".format(obs, rewards, dones, info))
+		#print("In train mode obs:{}, \n rewards:{}, \n dones:{}, \n info:{} \n".format(obs, rewards, dones, info))
 
 
 
-		# make sure environment is in test mode
-		print("setting test env mode..... \n")
-		envmodel.env_method('testenv')
+	# make sure environment is in test mode
+	print("setting test env mode..... \n")
+	envmodel.env_method('testenv')
 
-		# resest environment
-		print("Reset env in test mode.... \n")
-		out = envmodel.reset()  # env_method('reset')
-		print('reset in test mode: {} \n'.format(out))
+	# resest environment
+	print("Reset env in test mode.... \n")
+	out = envmodel.reset()  # env_method('reset')
+	print('reset in test mode: {} \n'.format(out))
 
-		# Step through the environment eg apply a change of 0.43*F in the down direction
-		print("executing test step..... \n")
-		#out4a,out4b = envmodel.env_method( 'step', (np.array([0.43])) )  # step(np.array([0.43]))
-		obs, rewards, dones, info = envmodel.step(np.array([0.43]*n_envs))
-		print("In test mode obs:{}, \n rewards:{}, \n dones:{}, \n info:{} \n".format(obs, rewards, dones, info))
-			
-		envmodel.close()
+	# Step through the environment eg apply a change of 0.43*F in the down direction
+	print("executing test step..... \n")
+	#out4a,out4b = envmodel.env_method( 'step', (np.array([0.43])) )  # step(np.array([0.43]))
+	obs, rewards, dones, info = envmodel.step(np.array([0.43]*n_envs))
+	print("In test mode obs:{}, \n rewards:{}, \n dones:{}, \n info:{} \n".format(obs, rewards, dones, info))
+		
+	envmodel.close()
