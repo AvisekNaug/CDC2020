@@ -624,6 +624,61 @@ def df2dflist(df: Union[str, pd.DataFrame], *args, subsequence: bool = True, per
 
 	return dflist
 
+def df2dflist_alt(df: Union[str, pd.DataFrame], *args, subsequence: bool = True, period: int = 1, days: int = 7, hours: int = 0):
+	"""[summary]
+	
+	Arguments:
+		df {Union[str, pd.DataFrame]} -- [description]
+	
+	Keyword Arguments:
+		subsequence {bool} -- [description] (default: {True})
+		period {int} -- [description] (default: {1})
+		days {int} -- [description] (default: {7})
+		hours {int} -- [description] (default: {0})
+	
+	Returns:
+		[type] -- [description]
+	"""
+	
+	if isinstance(df, str):
+
+		dfclass = readfile(df)
+		df = dfclass.return_df(processmethods=['file2df'])
+
+	if subsequence:
+
+		# divide the dataframe into contiguous samples
+		# dflist = subsequencing(df, period)
+
+		#minimum sequence length on which we train
+		# eg days = 7, period = 1, so we will select sequences from dflist of minimum sequence length 2016
+		assert (hours==0)|(period<=12), "If min chunk size is not a multiple of 1 day, period must be less than or equal to 12"
+		min_seq_length = days*int(1440/(5 * period)) +  hours*int(60/(5 * period))
+
+		# remove dataframes whose length is smaller than minimum sequence length
+		# dflist = [item for item in dflist if item.shape[0] >= min_seq_length]
+
+		# now we have dataframes whose length is atleast minimum sequence length
+		# next we divide dataframes larger than minimum sequence length into required sequence length chunks
+		if args:
+			assert len(args)==1, "Function df2dflist takes at most two positional arguments. More than two passed."
+			req_seq_length = args[0]
+			assert len(req_seq_length)<=len(min_seq_length),\
+			 "Req sequence length{} must be less than min sequence length{}".format(req_seq_length, min_seq_length)
+		else:
+			req_seq_length = min_seq_length
+		# dflist = req_seq_dfs(dflist, req_seq_length)
+		dflist = old_req_seq_chunks([df], days=days, hours=hours)
+
+		# remove dataframes whose length is smaller than 10% of of min_seq_length
+		dflist = [item for item in dflist if item.shape[0] >= 0.1*min_seq_length]
+
+	else:
+
+		dflist = [df]
+
+	return dflist
+
 
 def inputreshaper(X, input_timesteps=1, output_timesteps=1):
 	"""Reshapes the input/ predictor array into (nsamples, input_timesteps, input dimension)
