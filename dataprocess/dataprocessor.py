@@ -544,7 +544,7 @@ def old_req_seq_chunks(dflist,days=7,hours=0):
 		timeloc = h.index[0]
 		for _ in range(chunks):
 			dfchunks.append(h.loc[timeloc : timeloc + pd.DateOffset(days=days,hours=hours),:])
-			timeloc = timeloc + pd.DateOffset(days=days,hours=hours)
+			timeloc = timeloc + pd.DateOffset(days=days,hours=hours,minutes = 5)
 
 	return dfchunks
 
