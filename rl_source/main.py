@@ -9,7 +9,6 @@ if module_path not in sys.path:
 	sys.path.append(module_path)
 import warnings
 
-from dataprocess import dataprocessor as dp
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from pandas import DataFrame
@@ -23,12 +22,14 @@ with warnings.catch_warnings():
 	config = tf.ConfigProto(log_device_placement=True)
 	config.gpu_options.allow_growth = True  # pylint: disable=no-member
 	session = tf.Session(config=config)
-	
-	from keras.models import load_model
-	from nn_source import models as mp
-	from rl_source import alumnienv
+
 	from stable_baselines.common.vec_env import SubprocVecEnv, DummyVecEnv
 	from stable_baselines.common import set_global_seeds, make_vec_env
+	
+	from keras.models import load_model
+	from dataprocess import dataprocessor as dp
+	from nn_source import models as mp
+	from rl_source import alumnienv
 
 # wrap the environment in the vectorzied wrapper with SubprocVecEnv
 # run the environment inside if __name__ == '__main__':
@@ -36,7 +37,7 @@ with warnings.catch_warnings():
 if __name__ == '__main__':
 
 	# read the pickled file for ahu data
-	dfdata = dp.readfile('../data/processed/buildingdata.pkl')
+	dfdata = dp.readfile('../data/processed/smoothed_buildingdata.pkl')
 
 	# return pickled df
 	df = dfdata.return_df(processmethods=['file2df'])
@@ -48,7 +49,8 @@ if __name__ == '__main__':
 	dfscaled = DataFrame(dfscaler.fit_transform(df), index=df.index, columns=df.columns)
 
 	# load energy model
-	energymodel = load_model('../results/lstm/LSTM_model_360_0.01')  # Specify the path where energy model is stored
+	cwe_model = load_model('../results/lstm_cwe_best/LSTM_model_10_0.00')  # Specify the path where energy model is stored
+	hwe_model = load_model('../results/lstm_hwe_best/LSTM_model_42_0.01') # Specify the path where energy model is stored
 
 	# important parameters to scale the reward
 	params = {
@@ -64,22 +66,25 @@ if __name__ == '__main__':
 	}
 
 	# Arguments to be fed to the make_vec_env
+
 	env_id = alumnienv.Env  # the environment ID or the environment class
 	n_envs = 2  # can also be os.cpu_count()
 	"""always make sure that the number of environments is even"""
 	seed = 123  # the initial seed for the random number generator
 	start_index = 0  # start rank index
-	monitor_dir = '../log/Trial_{}/Interval_{}/'.format(1,1)  # Path to a folder where the monitor files will be saved
+	monitor_dir = '../log/Trial_{}/Interval_{}/'.format(0,1)  # Path to a folder where the monitor files will be saved
 	vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
-
 	env_kwargs = dict(  #  Optional keyword argument to pass to the env constructor
 		df=dfscaled,  # the file for iterating
 		obs_space_vars=['oat', 'orh', 'ghi', 'sat', 'avg_stpt', 'flow'],  # state space variable
 		action_space_vars=['sat'],  # action space variable
 		action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the params
-		energy_model=energymodel,  # trained lstm model
-		model_input_shape=(1, 1, 5),  # lstm model input data shape (no_samples, output_timestep, inputdim)
-		model_input_vars=['oat', 'orh', 'sat', 'ghi', 'flow'],  # lstm model input variables
+		cwe_energy_model=cwe_model,  # trained lstm model
+		cwe_input_shape=(1, 1, 5),  # lstm model input data shape (no_samples, output_timestep, inputdim)
+		cwe_input_vars=['oat', 'orh', 'sat', 'ghi', 'flow'],  # lstm model input variables
+		hwe_energy_model=hwe_model,  # trained lstm model
+		hwe_input_shape=(1, 1, 6),  # lstm model input data shape (no_samples, output_timestep, inputdim)
+		hwe_input_vars=['oat','orh', 'sat', 'ghi', 'hw_sf', 'hw_st'],  # lstm model input variables
 		**params  # the reward adjustment parameters
 	)
 
