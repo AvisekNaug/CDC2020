@@ -17,6 +17,7 @@ from sklearn.preprocessing import MinMaxScaler
 import pandas as pd
 import swifter
 from scipy import stats
+from scipy.fftpack import fft
 import scipy.signal as signal
 
 
@@ -356,7 +357,7 @@ def merge_df_columns(dlist):
 
 
 @timer
-def dataframeplot(df, lazy = True, style = '*', ylabel : str = 'Y-axis', xlabel : str = 'X-axis', legend = False):
+def dataframeplot(df, lazy = True, style = 'b--', ylabel : str = 'Y-axis', xlabel : str = 'X-axis', legend = False):
 	"""Inspects all the rows of data in one or separate plots
 	
 	Arguments:
@@ -374,11 +375,11 @@ def dataframeplot(df, lazy = True, style = '*', ylabel : str = 'Y-axis', xlabel 
 	if not lazy:
 		width, height = 20, int(df.shape[1]*3)
 		plt.rcParams["figure.figsize"] = (width, height)
-		_, ax = plt.subplots(df.shape[1],1)
+		_, ax = plt.subplots(nrows = df.shape[1], squeeze=False)
 		for i,j in zip(df.columns,range(df.shape[1])):
-			df.plot(y=[i],ax=ax[j],style=['b--'], legend=legend)
-		ax[j].set_xlabel(xlabel)
-		ax[j].set_ylabel(ylabel)
+			df.plot(y=[i],ax=ax[j][0],style=[style], legend=legend)
+		ax[j][0].set_xlabel(xlabel)
+		ax[j][0].set_ylabel(ylabel)
 	else:
 		ax = df.plot(y=df.columns, figsize=(20,7), legend=legend, style = [style]*df.shape[1])
 		ax.set_xlabel(xlabel)
@@ -453,7 +454,51 @@ def removeoutliers(df, columns: list, **kwargs):
 	return df
 
 
-def dfsmoothing(df, column_names: list = [], Wn = 0.015):
+def frequencyplot(df, T: Union[int,float]= 300):
+	"""plot the frequency spectrum of the columns of a timeseries dataframe
+
+	Arguments:
+		df {pd.DataFrame} -- the input datafrme
+	
+	Keyword Arguments:
+		T {Union[int,float]} -- sampling period of the signal in seconds (default: {300})
+	"""
+
+	f_s = 1 / T
+	N = df.shape[0]
+
+	width, height = 7, int(2*df.shape[1])
+	plt.rcParams["figure.figsize"] = (width, height)
+	num_cols = len(df.columns)
+
+	for idx, col in enumerate(df.columns):
+
+		y_value = df[col].to_numpy()
+		f_values, fft_values = get_fft_values(y_value, T, N, f_s)
+
+		plt.subplot(num_cols, 1, idx + 1)
+		plt.plot(f_values, fft_values, linestyle='-', color='blue', label = col)
+		plt.xlabel('Frequency [Hz]', fontsize=5)
+		plt.ylabel('Amplitude', fontsize=5)
+		plt.title("Frequency domain of the signal "+col, fontsize=5)
+		plt.legend()
+	
+	plt.subplots_adjust(hspace=0.7)
+	plt.show()
+
+	
+def get_fft_values(y_value, T, N, f_s):
+		f_values = np.linspace(0.0, 1.0/(2.0*T), N//2)
+		fft_values_ = fft(y_value)
+		fft_values = 2.0/N * np.abs(fft_values_[0:N//2])
+		return f_values, fft_values
+
+
+def dfsmoothing(df, 
+				column_names: list = [], 
+				order: int = 5, 
+				Wn: Union[list, float] = 0.015,
+				T : Union[int,float]= 300):
 	"""Smoothes the dataframe columns using butterworth smoothing
 	
 	Arguments:
@@ -461,7 +506,9 @@ def dfsmoothing(df, column_names: list = [], Wn = 0.015):
 	
 	Keyword Arguments:
 		column_names {list} -- list of column names to be smoothed (default: {None})
-		Wn {float} -- Critical Frequency above which all signals must be removed (default: {0.015})
+		order {int} -- Order of the filter (default: {5})
+		Wn {Union[list, float]} -- Cutoff frequency (default: {0.015})
+		T {Union[int, float]} -- sampling period of the signal in seconds (default: {300})
 	
 	Returns:
 		pd.DataFrame -- smoothed data frame
@@ -475,13 +522,23 @@ def dfsmoothing(df, column_names: list = [], Wn = 0.015):
 
 		# prevent modifying original dataframe
 		df2 = df.copy()
-
-		# First, design the Buterworth filter
-		N = 2  # Filter order
-		B, A = signal.butter(N, Wn, output='ba')
-		for i in column_names:
+		# sample rate
+		fs = 1/T
+		# nyquist frequency
+		nyq = 0.5 * fs
+		# make a list in case cutoff is scalar
+		if not isinstance(Wn, list):
+			Wn = [Wn] * len(column_names)
+		# normal cutoff
+		Wn = [cutoff / nyq for cutoff in Wn]
+		# columnwise filtering
+		for idx, i in enumerate(column_names):
+			# First, design the Buterworth filter
+			B, A = signal.butter(order, Wn[idx], btype='low', analog=False)
+			# filter the signal
 			df2[i] = signal.filtfilt(B, A, df2[i])
-		df2 = dropNaNrows(df2)
+			# drop any NaN rows created
+			df2 = dropNaNrows(df2)
 		return df2
 
 
@@ -776,7 +833,8 @@ def createlag(df, outputcols: list, lag: int = -1):
 
 
 def df2arrays(df, split: float = 0.75, shuffle: bool = False, predictorcols : list = [], outputcols: list = [], \
- lag: int = -1, scaling : bool = False, feature_range = (0,1), reshaping : bool = True, input_timesteps: int = 1, output_timesteps: int = 1):
+ lag: int = -1, scaling : bool = False, feature_range = (0,1), reshaping : bool = True, input_timesteps: int = 1, \
+	 output_timesteps: int = 1, X_scale = None, y_scale = None):
 	"""
 	0 Shift output columns up by lag time points
 	1 Scales the arrays if needed based on MinMaxScaler
@@ -811,8 +869,8 @@ def df2arrays(df, split: float = 0.75, shuffle: bool = False, predictorcols : li
 
 	# 1 Scales the arrays if needed based on MinMaxScaler	
 	scaler = MinMaxScaler(feature_range=feature_range)
-	X_scaler = scaler.fit(X)
-	y_scaler = scaler.fit(y)
+	X_scaler = X_scale or scaler.fit(X)
+	y_scaler = y_scale or scaler.fit(y)
 	if scaling:
 		X = X_scaler.transform(X)
 		y = y_scaler.transform(y)

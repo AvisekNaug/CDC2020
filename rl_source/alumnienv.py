@@ -109,6 +109,9 @@ class Env(gym.Env):
 		else:
 			self.dataptr = self.dataptr + 1 if self.dataptr < self.test_data_limit - 1 else self.train_data_limit
 
+		# process control action
+		a = self.process_action(self.s, a)
+
 		# step to the next state and get new observation and processed action
 		self.s_next, a = self.state_transition(self.s, a)
 
@@ -133,9 +136,6 @@ class Env(gym.Env):
 		"""
 		Custom method for state transition model
 		"""
-
-		# process control action
-		a = self.process_action(s, a)
 
 		# Helps iterate through the data file to get info of NEXT time step. This is not the actual observation
 		self.row = self.df.iloc[[self.dataptr],:].copy()
@@ -228,7 +228,7 @@ class Env(gym.Env):
 
 
 	def process_action(self, s, a):
-		"""Custom action processer
+		"""Custom action processer which depends on current state
 		"""
 		# Action variable upper and lower bounds for the dataframe provided
 		a_lowerbound = self.stats.loc['min', self.action_space_vars].to_numpy().flatten()

@@ -88,6 +88,7 @@ def main():
 		hwe_input_vars=['oat','orh', 'sat', 'ghi', 'hw_sf', 'hw_st'],  # lstm model input variables
 		**params  # the reward adjustment parameters
 	)
+	#vec_env_kwargs = dict(start_method="fork")
 
 	envmodel = make_vec_env(env_id = env_id,
 					n_envs = n_envs,
@@ -95,7 +96,8 @@ def main():
 					start_index = start_index,
 					monitor_dir = monitor_dir,
 					vec_env_cls = vec_env_cls,
-					env_kwargs = env_kwargs)
+					env_kwargs = env_kwargs)#,
+					#vec_env_kwargs=vec_env_kwargs)
 
 	# try the environment
 
@@ -138,5 +140,4 @@ def main():
 
 if __name__ == '__main__':
 	main()
-	print("Done!") 
-	sys.exit()
+	print("Done!")
