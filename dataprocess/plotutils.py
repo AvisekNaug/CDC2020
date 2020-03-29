@@ -1,7 +1,9 @@
 import matplotlib
 from matplotlib import pyplot as plt
 import numpy as np
+
 from scipy.interpolate import make_interp_spline, BSpline
+from pandas import read_csv
 
 
 def pred_v_target_plot(timegap, outputdim, output_timesteps, preds, target,
@@ -44,6 +46,7 @@ def pred_v_target_plot(timegap, outputdim, output_timesteps, preds, target,
 	fig.savefig(saveloc+str(timegap)+'_LSTM_'+typeofplot+'prediction-Week{}.pdf'.format(Week), bbox_inches='tight')
 	plt.close(fig)
 
+
 def pred_v_target_plot_transferlearning(timegap, outputdim, output_timesteps, preds, target,
  saveloc, scaling: bool, scaler, lag: int = -1, outputdim_names : list = [], typeofplot: str = 'train', Idx: int = 0):
 
@@ -83,6 +86,7 @@ def pred_v_target_plot_transferlearning(timegap, outputdim, output_timesteps, pr
 			axs[i+j, 0].minorticks_on()
 	fig.savefig(saveloc+str(timegap)+'_LSTM_'+typeofplot+'prediction-{}.pdf'.format(Idx), bbox_inches='tight')
 	plt.close(fig)
+
 
 def single_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 0.50, smoothcurve: bool = False,
  bar_annotate: bool = False, saveplot: bool = False, plot_name: str = 'BarPlot', xlabel: str = 'Xlabel', ylabel: str = 'ylabel',
@@ -129,3 +133,58 @@ def single_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 
 		if not saveloc.endswith('/'):
 			saveloc += '/'
 		plt.savefig(saveloc + 'Weekly Energy Savings.png', bbox_inches='tight', dpi=300)
+
+
+def reward_agg_plot(trial_list: list, 
+					interval_start: int, 
+					interval_end: int,
+					readfrom : str, 
+					saveto: str, 
+					envid: int = 0):
+	# since there will be virtually no variation between env_ids in terms of performance, 
+	# we do not num_envs number of other environments and select just once env_id
+	
+	trialwise_ep_reward = []
+
+	for trial in trial_list:
+
+		ep_reward = []
+
+		for interval in range(interval_start, interval_end+1):
+
+			readpath = readfrom +'Trial_'+ str(trial) +'/Interval_' + str(interval)+'/' + str(envid) + '.monitor.csv'
+			ep_reward = ep_reward + [float(j) for j in read_csv(readpath, header=1,index_col=False)['r']]
+		
+		trialwise_ep_reward.append(ep_reward)
+
+	trialwise_ep_reward = np.array(trialwise_ep_reward)
+
+	rewardmean, rewardstd = np.mean(trialwise_ep_reward, axis=0), np.std(trialwise_ep_reward, axis=0)
+	updatedlb, updatedub = np.subtract(rewardmean, 2*rewardstd), np.add(rewardmean, 2*rewardstd)
+
+	# Plot parameters
+	width = 15.0
+	height = width / 1.618
+	plt.rcParams["figure.figsize"] = (width, height)
+	plt.rc('font',**{'size':16})
+	plt.rc('legend',**{'fontsize':14})
+
+	fig, ax = plt.subplots()
+
+	# plot the shaded range of the confidence intervals
+	ax.fill_between(range(rewardmean.shape[0]), updatedub, updatedlb,
+					color='g', alpha=0.6, hatch="\\", label='Two Standard Deviation \n Bounds for Cumulative Reward')
+	# plot the mean on top
+	ax.plot(rewardmean, 'lime', marker='*', label = 'Mean Reward')
+
+	# Axis labeling
+	ax.set_title('Progress of Cumulative Episode Reward \n as Training Progresses')
+	ax.set_xlabel('Episode Number')
+	ax.set_ylabel('Cumulative reward per episode')
+	ax.legend(loc='upper left', bbox_to_anchor=(0, -0.10), prop={'size': 15})
+
+	# Add grid for estimating
+	plt.grid(which='both', linewidth=0.2)
+	plt.show()
+	fig.savefig(saveto + 'AverageReward.png', bbox_inches='tight')
+
