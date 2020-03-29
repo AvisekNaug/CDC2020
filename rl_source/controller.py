@@ -45,10 +45,11 @@ def train_agent(agent, env=None, steps=30000, tb_log_name = "../log/ppo2_event_f
 	"""
 	Train the agent on the environment
 	"""
-	agent.set_env(env)
-	trained_model = agent.learn(total_timesteps=steps, callback=CustomCallBack, tb_log_name=tb_log_name)
+	if env is not None:
+		agent.set_env(env)
+	trained_agent = agent.learn(total_timesteps=steps, callback=CustomCallBack, tb_log_name=tb_log_name)
 
-	return trained_model
+	return trained_agent
 
 def CustomCallBack(_locals, _globals):
 	"""
@@ -138,7 +139,7 @@ def test_agent(agent_weight_path: str, env, num_episodes = 1):
 			all_done = all(dones_trace)
 
 			for idx, done in enumerate(dones_trace):
-				if not done:
+				if not done:  # log info from only those environments which have not terminated
 					perf_metrics_list[idx].on_step_end(infotuple[idx])  # log the info dictionary
 			
 		# end episode command issued for all environments
