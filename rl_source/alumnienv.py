@@ -174,6 +174,8 @@ class Env(gym.Env):
 			else self.params['uncomfortable']
 		# reward_comfort *= self.params['comfort_reward_weight']  # don't weight it so that we can try ad hoc weights
 
+		# TODO: Create error component
+
 		reward = self.params['energy_reward_weight']*reward_energy + self.params['comfort_reward_weight']*reward_comfort
 
 		if self.testing:
