@@ -1,27 +1,42 @@
+seed = 123  # the initial seed for the random number generator
+
+# 1. Set the `PYTHONHASHSEED` environment variable at a fixed value
 import os
+os.environ['PYTHONHASHSEED']=str(seed)
+# 2. Set the `python` built-in pseudo-random generator at a fixed value
+import random
+random.seed(seed)
+# 3. Set the `numpy` pseudo-random generator at a fixed value
+import numpy as np
+np.random.seed(seed)
+
+# Enable '0' or disable '' GPU use
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
+
+# including the project directory to the notebook level
 import sys
 module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
 	sys.path.append(module_path)
+
 import warnings
 from multiprocessing import freeze_support
 
-import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from pandas import DataFrame, concat
-
-# TODO: Set the seeds
 
 with warnings.catch_warnings():
 
 	warnings.filterwarnings("ignore",category=FutureWarning)
 
-	# needed to prevent OOM error
 	import tensorflow as tf
+	# 4. Set the `tensorflow` pseudo-random generator at a fixed value
+	tf.compat.v1.set_random_seed(seed)
+	# Following Three lines needed to prevent OOM error
 	config = tf.ConfigProto(log_device_placement=True)
 	config.gpu_options.allow_growth = True  # pylint: disable=no-member
 	session = tf.Session(config=config)
+	from keras import backend as K
 
 	from stable_baselines.common.vec_env import SubprocVecEnv, DummyVecEnv
 	from stable_baselines.common import set_global_seeds, make_vec_env
@@ -120,6 +135,24 @@ def overlap_dflist2array(out_dflist, input_vars, outut_vars,lag,splitvalue, X_sc
 
 	return weeklist
 	
+def create_energy_model(path, modelconfig, X_shape, y_shape, period, savename):
+
+	#Instantiate learner model
+	nn_model = mp.lstm_model_transferlearning(path, inputdim=X_shape[-1], outputdim=y_shape[-1], period=period)
+
+	# Design model architecture
+	nn_model.design_network(lstmhiddenlayers=[modelconfig['lstm_hidden_units']] * modelconfig['lstm_no_layers'],
+						densehiddenlayers=[modelconfig['dense_hidden_units']] * modelconfig['dense_no_layers'],
+						dropoutlist=[[], []], batchnormalizelist=[[], []])
+
+	# compile model
+	nn_model.model_compile()
+
+	# creating early stopping and learning reate changing callbacks
+	nn_model.model_callbacks(savename = savename)
+
+	return nn_model
+
 
 
 def main(trial: int = 0, adaptive = True):
@@ -130,6 +163,14 @@ def main(trial: int = 0, adaptive = True):
 	cwe_outut_vars = ['30min_cwe']  # cwe lstm model input variables
 	hwe_input_vars=['oat','orh', 'sat', 'ghi', 'hw_sf', 'hw_st'],  # hwe lstm model input variables
 	hwe_outut_vars = ['30min_hwe']  # hwe lstm model input variables
+	modelconfig = {
+	'lstm_hidden_units': 4,
+	'lstm_no_layers': 2,
+	'dense_hidden_units':8,
+	'dense_no_layers': 4,
+	'train_epochs':1000,
+	'retrain_from_layers':2
+	}  # model config for creating energy model
 
 	num_rl_steps = 30000  # steps to train the rl agent
 	n_envs = 2  # always make sure that the number of environments is even; can also be os.cpu_count()
@@ -138,13 +179,19 @@ def main(trial: int = 0, adaptive = True):
 
 	pathinsert = 'adaptive' if adaptive else 'fixed'  # Decide folder structure based on adaptive vs fixed controller
 
-	model_save_dir='../models/'+pathinsert+'/Trial_{}/'.format(trial)  # save the rl agents here
-	make_dir(model_save_dir)  # create the folder if it does not exist
+	rlmodel_save_dir='../models/'+pathinsert+'/Trial_{}/rl/'.format(trial)  # save the model and rl agents here
+	make_dir(rlmodel_save_dir)  # create the folder if it does not exist
 
-	log_dir = model_save_dir + '/performance/'  # save the rl performance output here
+	log_dir = rlmodel_save_dir + '/performance/'  # save the rl performance output here
 	make_dir(log_dir)  # create the folder if it does not exist
 
-	base_log_path = '../log/'+pathinsert+'/'
+	base_log_path = '../log/'+pathinsert+'/'  # path to save environment monitor logs
+
+	cwe_model_save_dir = '../models/'+pathinsert+'/Trial_{}/cwe/'.format(trial)  # save cwe model and its output here
+	make_dir(cwe_model_save_dir)  # create the folder if it does not exist
+
+	hwe_model_save_dir = '../models/'+pathinsert+'/Trial_{}/hwe/'.format(trial)  # save hwe model and its output here
+	make_dir(hwe_model_save_dir)  # create the folder if it does not exist
 
 	
 	#######################         Begin : Creating all the data requirements     ##################################
@@ -179,7 +226,6 @@ def main(trial: int = 0, adaptive = True):
 		}
 
 	env_id = alumnienv.Env  # the environment ID or the environment class
-	seed = 123  # the initial seed for the random number generator
 	start_index = 0  # start rank index
 	vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
 	#######################         End : Prerequisites for the environment     ##################################
@@ -188,23 +234,73 @@ def main(trial: int = 0, adaptive = True):
 	# main iteration loop
 
 	agent_created = False
+	hwe_created = False
+	cwe_created = False
+	initial_epoch_cwe, initial_epoch_hwe = 0, 0
+	freeze_model = True
+	reinitialize = True
+
 	Week = 0
+
 
 	for out_df, cwe_week, hwe_week in zip(out_dflist, cwe_week_list, hwe_week_list):
 		
 		"""train lstm model on cwe"""
-		# TODO: train the model and return best model so far
+		# load the data arrays
+		X_train, y_train, X_test, y_test = cwe_week['X_train'], cwe_week['y_train'], cwe_week['X_test'], cwe_week['y_test']
 
-		# TODO: load energy model
-		cwe_model = load_model('../results/lstm_cwe_best/LSTM_model_10_0.00')
+		if not cwe_created:  # create model for the first time
+			cwe_model = create_energy_model(cwe_model_save_dir, modelconfig, X_train.shape,
+			 y_train.shape, period, 'cwe_best_model')
+		else:  # else load saved model and freeze layers and reinitialize head layers
+			cwe_model.model.load_weights(cwe_model_save_dir+'cwe_best_model') # load best model weights in to cwe_model class
+			for layer in cwe_model.model.layers[:-modelconfig['retrain_from_layers']]:  # freeze layers
+				layer.trainable = False
+			if reinitialize:  
+				for layer in cwe_model.model.layers[-modelconfig['retrain_from_layers']:]:
+						layer.kernel.initializer.run(session=K.get_session())
+						layer.bias.initializer.run(session=K.get_session())
+
+		# train the model
+		cwe_history = cwe_model.train_model(X_train, y_train, X_test, y_test, epochs=modelconfig['train_epochs'],
+									initial_epoch = initial_epoch_cwe)
+		try:
+			initial_epoch_cwe += len(cwe_history.history['loss'])
+		except KeyError:
+			pass
+
+		# evaluate the model for metrics at this stage
+		_, _ = cwe_model.evaluate_model(X_train, y_train, X_test, y_test, cwe_y_scaler, scaling=True,
+											saveplot=True,Idx=cwe_week['Id'],outputdim_names=['Cooling Energy'])
 
 
 		"""train lstm model on hwe"""
-		# TODO: train the model and return best model so far
+		# load the data arrays
+		X_train, y_train, X_test, y_test = hwe_week['X_train'], hwe_week['y_train'], hwe_week['X_test'], hwe_week['y_test']
 
+		if not hwe_created:  # create model for the first time
+			hwe_model = create_energy_model(hwe_model_save_dir, modelconfig, X_train.shape,
+			 y_train.shape, period, 'hwe_best_model')
+		else:  # else load saved model and freeze layers and reinitialize head layers
+			hwe_model.model.load_weights(hwe_model_save_dir+'hwe_best_model') # load best model weights in to hwe_model class
+			for layer in hwe_model.model.layers[:-modelconfig['retrain_from_layers']]:  # freeze layers
+				layer.trainable = False
+			if reinitialize:  
+				for layer in hwe_model.model.layers[-modelconfig['retrain_from_layers']:]:
+						layer.kernel.initializer.run(session=K.get_session())
+						layer.bias.initializer.run(session=K.get_session())
 
-		# TODO: load energy model
-		hwe_model = load_model('../results/lstm_hwe_best/LSTM_model_42_0.01')
+		# train the model
+		hwe_history = hwe_model.train_model(X_train, y_train, X_test, y_test, epochs=modelconfig['train_epochs'],
+									initial_epoch = initial_epoch_hwe)
+		try:
+			initial_epoch_hwe += len(hwe_history.history['loss'])
+		except KeyError:
+			pass
+
+		# evaluate the model for metrics at this stage
+		_, _ = hwe_model.evaluate_model(X_train, y_train, X_test, y_test, hwe_y_scaler, scaling=True,
+											saveplot=True,Idx=hwe_week['Id'],outputdim_names=['Heating Energy'])
 
 
 		"""create environment with new data"""
@@ -239,7 +335,7 @@ def main(trial: int = 0, adaptive = True):
 		# create agent with new data or reuse old agent if in the loop for the first time
 		if not agent_created:
 			# create new agent with the environment model
-			agent = controller.get_agent(env=envmodel, model_save_dir=model_save_dir, monitor_log_dir=monitor_dir)
+			agent = controller.get_agent(env=envmodel, model_save_dir=rlmodel_save_dir, monitor_log_dir=monitor_dir)
 			
 
 
@@ -263,7 +359,7 @@ def main(trial: int = 0, adaptive = True):
 		envmodel.env_method('testenv')
 
 		# provide path to the current best rl agent weights and test it
-		best_model_path = model_save_dir + 'best_model.pkl'
+		best_model_path = rlmodel_save_dir + 'best_model.pkl'
 		test_perf_log = controller.test_agent(best_model_path, envmodel, num_episodes=1)
 
 		envmodel.close()  # clear the environment and its resources
@@ -273,6 +369,8 @@ def main(trial: int = 0, adaptive = True):
 
 		Week += 1  # shift to the next week
 		agent_created = True  # flip the agent_created flag
+		cwe_created = True  # flip the flag
+		freeze_model = False  # flip the flag
 
 # wrap the environment in the vectorzied wrapper with SubprocVecEnv
 # run the environment inside if __name__ == '__main__':
