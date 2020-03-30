@@ -179,7 +179,7 @@ class Env(gym.Env):
 		reward = self.params['energy_reward_weight']*reward_energy + self.params['comfort_reward_weight']*reward_comfort
 
 		if self.testing:
-			step_info = {'time': str(s.index[0]),
+			step_info = {'datetime': str(s.index[0]),
 						'energy': rl_energy,
 						'baseline_energy':hist_energy,
 						'reward_energy': reward_energy,
