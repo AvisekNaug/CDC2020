@@ -311,10 +311,12 @@ class lstm_model_transferlearning():
 	def show_model(self,):
 		print(self.model.summary())
 
-	def model_callbacks(self,):
+	def model_callbacks(self,savename = 'best_model'):
 
-		self.modelchkpoint = ModelCheckpoint(self.saveloc+'LSTM_model_{epoch:02d}_{val_loss:.2f}',
-		 monitor = 'val_loss', save_best_only = True, period=2)
+		# self.modelchkpoint = ModelCheckpoint(self.saveloc+'LSTM_model_{epoch:02d}_{val_loss:.2f}',
+		#  monitor = 'val_loss', save_best_only = True, period=2)
+
+		self.modelchkpoint = ModelCheckpoint(self.saveloc + savename, monitor = 'val_loss', save_best_only = True, period=2)
 
 		self.earlystopping = EarlyStopping(monitor = 'val_loss', patience=8, restore_best_weights=True)
 
@@ -342,7 +344,7 @@ class lstm_model_transferlearning():
 
 	def save_model(self,):
 
-			self.model.save(self.saveloc+'LSTM_model_{:02d}epochs.hdf5'.format(self.epochs))
+			self.model.save(self.saveloc+'LSTM_model.hdf5')
 
 	def evaluate_model(self, X_train, y_train, X_test, y_test, y_sc, scaling: bool = True, saveplot: bool = False, Idx: int = 0,
 	 lag: int = -1, outputdim_names = ['TotalEnergy']):
