@@ -8,14 +8,14 @@ import pandas as pd
 def rl_perf_save(test_perf_log_list: list, log_dir: str, save_as: str = 'csv'):
 
 	# assert that perf metric has data from at least one episode
-	assert all([len(i.metrics) != 0 for i in test_perf_log_list]), 'Need metric data for at least one episode'
+	assert all([len(i.metriclist) != 0 for i in test_perf_log_list]), 'Need metric data for at least one episode'
 
 	# iterate throguh each environment in a single Trial
 	for idx, test_perf_log in enumerate(test_perf_log_list):
 	
-		# performance metrics is a list where each element has 
+		# performance metriclist is a list where each element has 
 		# performance data for each episode in a dict
-		perf_metric_list = test_perf_log.metrics
+		perf_metric_list = test_perf_log.metriclist
 
 		# iterating through the list to save the data
 		for episode_dict in perf_metric_list:
