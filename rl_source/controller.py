@@ -84,12 +84,11 @@ def CustomCallBack(_locals, _globals):
 		# all environments have at least one episode data row in monitor.csv
 		if all([len(x) > 0 for x in x_list]):  
 			# Average reward for last 5 episodes across all environments in one go by using None
-			mean_reward = np.mean(np.array(y_list)[-5:,:], axis = None)
+			mean_reward = np.mean(np.array(y_list)[:,-5:], axis = None)
 			# Average across all environments in one go by using None
-			print('An average of {} episodes completed'.format(np.mean(np.array(x_list)[-1,:], axis = None)[-1]))
+			print('An average of {} episodes completed'.format(np.mean(np.array(x_list)[:,-1], axis = None)))
 			# Compare Reward
-			print("Best mean reward: {:.2f} - Latest 5 sample mean reward per \
-				episode: {:.2f}".format(best_mean_reward, mean_reward))
+			print("Best mean reward: {:.2f} - Latest 5 sample mean reward per episode: {:.2f}".format(best_mean_reward, mean_reward))
 			# New best model, you could save the agent here
 			if mean_reward > best_mean_reward:
 				best_mean_reward = mean_reward

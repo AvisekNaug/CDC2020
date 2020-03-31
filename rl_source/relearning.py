@@ -314,7 +314,7 @@ def main(trial: int = 0, adaptive = True):
 		env_kwargs = dict(  #  Optional keyword argument to pass to the env constructor
 
 			df=DataFrame(dfscaler.transform(out_df), index=out_df.index,
-			 columns=df.columns),  # the file for iterating; it is scaled before being passed
+			 columns=out_df.columns),  # the file for iterating; it is scaled before being passed
 			obs_space_vars=obs_space_vars,  # state space variable
 			action_space_vars=action_space_vars,  # action space variable
 			action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the params
@@ -339,7 +339,7 @@ def main(trial: int = 0, adaptive = True):
 		# create agent with new data or reuse old agent if in the loop for the first time
 		if not agent_created:
 			# create new agent with the environment model
-			agent = controller.get_agent(env=envmodel, model_save_dir=rlmodel_save_dir, monitor_log_dir=monitor_dir)
+			agent = controller.get_agent(env=envmodel, model_save_dir=rlmodel_save_dir, monitor_log_dir=base_log_path)
 			
 
 
