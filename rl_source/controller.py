@@ -13,7 +13,7 @@ from stable_baselines.results_plotter import ts2xy
 # current best mean reward
 best_mean_reward = -np.inf
 #steps completed
-n_steps = 0
+total_time_steps = 0
 
 
 def get_agent(env,
@@ -58,7 +58,7 @@ def CustomCallBack(_locals, _globals):
 	"""
 	self_ = _locals['self']
 
-	global best_mean_reward, n_steps
+	global best_mean_reward, total_time_steps
 
 	if not self_.is_tb_set:
 		# Do some initial logging setup
@@ -68,8 +68,8 @@ def CustomCallBack(_locals, _globals):
 		# reverse the key
 		self_is_tb_set = True  # pylint: disable=unused-variable
 
-	# Print stats every 1000 calls, since for PPO it is called at every n_step
-	if (n_steps) % (1000*self_.env.num_envs) == 0:
+	# Print stats every 1000*self_.env.num_envs calls, since for PPO it is called at every n_step
+	if (total_time_steps) % (1000*self_.env.num_envs) == 0:
 		# Evaluate policy training performance
 		# if np.any(_locals['masks']):  # if the current update step contains episode termination
 			# prepare csv files to look into
@@ -95,7 +95,7 @@ def CustomCallBack(_locals, _globals):
 				# Example for saving best model
 				print("Saving new best model")
 				self_.save(self_.model_save_dir + 'best_model.pkl')
-	n_steps += self_.env.num_envs
+	total_time_steps += self_.env.num_envs
 
 	return True
 
