@@ -69,8 +69,7 @@ def CustomCallBack(_locals, _globals):
 		self_is_tb_set = True  # pylint: disable=unused-variable
 
 	# Print stats every 1000 calls, since for PPO it is called at every n_step
-	# TODO: make call num_envs agnostic
-	if (n_steps) % 1000 == 0:
+	if (n_steps) % (1000*self_.env.num_envs) == 0:
 		# Evaluate policy training performance
 		# if np.any(_locals['masks']):  # if the current update step contains episode termination
 			# prepare csv files to look into

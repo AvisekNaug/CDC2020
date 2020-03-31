@@ -333,7 +333,7 @@ class lstm_model_transferlearning():
 
 		# train the model
 		self.history = self.model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, \
-			validation_data=(X_val, y_val) , verbose=2, shuffle=False,initial_epoch = initial_epoch, \
+			validation_data=(X_val, y_val) , verbose=0, shuffle=False,initial_epoch = initial_epoch, \
 				callbacks=[self.modelchkpoint, self.earlystopping,self.reduclronplateau])
 
 		if saveModel:

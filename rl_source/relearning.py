@@ -54,8 +54,8 @@ from dataprocess import logutils as lu
 def make_dir(dir_path):
 	# clear old files
 	try:
-		os.mkdir(dir_path)
-	except FileExistsError:
+		os.makedirs(dir_path)
+	except IsADirectoryError:
 		files = os.listdir(dir_path)
 		for f in files:
 			os.remove(dir_path + f)
@@ -124,14 +124,14 @@ def overlap_dflist2array(out_dflist, input_vars, outut_vars,lag,splitvalue, X_sc
 		predictorcols=input_vars, outputcols=outut_vars, lag=lag, split=splitvalue, reshaping=True,
 		scaling=True, feature_range=(0,1), X_scale= X_scale, y_scale=y_scale)
 
-	weeklist.append({
-        'Id':'Year-{}-Week-{}'.format(str(df.index[0].year), 
-                                      str(df.index[0].week)),
-        'X_train':X_train,
-        'y_train': y_train,
-        'X_test': X_test,
-        'y_test': y_test
-    })
+		weeklist.append({
+			'Id':'Year-{}-Week-{}'.format(str(df.index[0].year), 
+										str(df.index[0].week)),
+			'X_train':X_train,
+			'y_train': y_train,
+			'X_test': X_test,
+			'y_test': y_test
+		})
 
 	return weeklist
 	
@@ -159,23 +159,23 @@ def main(trial: int = 0, adaptive = True):
 
 	period = 6
 
-	cwe_input_vars=['oat', 'orh', 'sat', 'ghi', 'flow'],  # cwe lstm model input variables
-	cwe_outut_vars = ['30min_cwe']  # cwe lstm model input variables
-	hwe_input_vars=['oat','orh', 'sat', 'ghi', 'hw_sf', 'hw_st'],  # hwe lstm model input variables
-	hwe_outut_vars = ['30min_hwe']  # hwe lstm model input variables
+	cwe_input_vars=['oat', 'orh', 'sat', 'ghi', 'flow']  # cwe lstm model input variables
+	cwe_output_vars = ['30min_cwe']  # cwe lstm model input variables
+	hwe_input_vars=['oat','orh', 'sat', 'ghi', 'hw_sf', 'hw_st']  # hwe lstm model input variables
+	hwe_output_vars = ['30min_hwe']  # hwe lstm model input variables
 	modelconfig = {
 	'lstm_hidden_units': 4,
 	'lstm_no_layers': 2,
 	'dense_hidden_units':8,
 	'dense_no_layers': 4,
-	'train_epochs':1000,
+	'train_epochs':2000,
 	'retrain_from_layers':2
 	}  # model config for creating energy model
 
 	num_rl_steps = 30000  # steps to train the rl agent
 	n_envs = 2  # always make sure that the number of environments is even; can also be os.cpu_count()
-	obs_space_vars=['oat', 'orh', 'ghi', 'sat', 'avg_stpt', 'flow'],  # rl state space
-	action_space_vars=['sat'],  # rl action space
+	obs_space_vars=['oat', 'orh', 'ghi', 'sat', 'avg_stpt', 'flow']  # rl state space
+	action_space_vars=['sat']  # rl action space
 
 	pathinsert = 'adaptive' if adaptive else 'fixed'  # Decide folder structure based on adaptive vs fixed controller
 
@@ -185,7 +185,7 @@ def main(trial: int = 0, adaptive = True):
 	log_dir = rlmodel_save_dir + '/performance/'  # save the rl performance output here
 	make_dir(log_dir)  # create the folder if it does not exist
 
-	base_log_path = '../log/'+pathinsert+'/'  # path to save environment monitor logs
+	base_log_path = '../log/'+pathinsert+'/Trial_{}/'.format(trial)  # path to save environment monitor logs
 
 	cwe_model_save_dir = '../models/'+pathinsert+'/Trial_{}/cwe/'.format(trial)  # save cwe model and its output here
 	make_dir(cwe_model_save_dir)  # create the folder if it does not exist
@@ -200,15 +200,15 @@ def main(trial: int = 0, adaptive = True):
 	out_dflist = dflist2overlap_dflist(dflist, data_weeks=data_weeks)  # Create dflist with weekly overlaps
 
 	_, _, _, _, cwe_X_scaler, cwe_y_scaler = dp.df2arrays(totaldf, predictorcols=cwe_input_vars, 
-	outputcols=cwe_outut_vars, feature_range=(0,1), reshaping=False)  # extract cwe scaler for entire data
+	outputcols=cwe_output_vars, feature_range=(0,1), reshaping=False)  # extract cwe scaler for entire data
 
 	_, _, _, _, hwe_X_scaler, hwe_y_scaler = dp.df2arrays(totaldf, predictorcols=hwe_input_vars,
-	outputcols=hwe_outut_vars, feature_range=(0,1), reshaping=False)  # extract hwe scaler for entire data
+	outputcols=hwe_output_vars, feature_range=(0,1), reshaping=False)  # extract hwe scaler for entire data
 
-	cwe_week_list = overlap_dflist2array(out_dflist, cwe_input_vars, cwe_outut_vars, lag=-1, 
+	cwe_week_list = overlap_dflist2array(out_dflist, cwe_input_vars, cwe_output_vars, lag=-1, 
 										splitvalue=(data_weeks-1)/data_weeks, X_scale=cwe_X_scaler, y_scale=cwe_y_scaler)
 
-	hwe_week_list = overlap_dflist2array(out_dflist, hwe_input_vars, hwe_outut_vars, lag=-1, 
+	hwe_week_list = overlap_dflist2array(out_dflist, hwe_input_vars, hwe_output_vars, lag=-1, 
 										splitvalue=(data_weeks-1)/data_weeks, X_scale=hwe_X_scaler, y_scale=hwe_y_scaler)
 
 	erromsg = "Unequal lists: len(out_dflist)={0:}, len(cwe_week_list)={1:}, len(hwe_week_list)={2:}".format(
@@ -254,8 +254,9 @@ def main(trial: int = 0, adaptive = True):
 			 y_train.shape, period, 'cwe_best_model')
 		else:  # else load saved model and freeze layers and reinitialize head layers
 			cwe_model.model.load_weights(cwe_model_save_dir+'cwe_best_model') # load best model weights in to cwe_model class
-			for layer in cwe_model.model.layers[:-modelconfig['retrain_from_layers']]:  # freeze layers
-				layer.trainable = False
+			if freeze_model:
+				for layer in cwe_model.model.layers[:-modelconfig['retrain_from_layers']]:  # freeze layers
+					layer.trainable = False
 			if reinitialize:  
 				for layer in cwe_model.model.layers[-modelconfig['retrain_from_layers']:]:
 						layer.kernel.initializer.run(session=K.get_session())
@@ -283,12 +284,14 @@ def main(trial: int = 0, adaptive = True):
 			 y_train.shape, period, 'hwe_best_model')
 		else:  # else load saved model and freeze layers and reinitialize head layers
 			hwe_model.model.load_weights(hwe_model_save_dir+'hwe_best_model') # load best model weights in to hwe_model class
-			for layer in hwe_model.model.layers[:-modelconfig['retrain_from_layers']]:  # freeze layers
-				layer.trainable = False
+			if freeze_model:
+				for layer in hwe_model.model.layers[:-modelconfig['retrain_from_layers']]:  # freeze layers
+					layer.trainable = False
 			if reinitialize:  
 				for layer in hwe_model.model.layers[-modelconfig['retrain_from_layers']:]:
 						layer.kernel.initializer.run(session=K.get_session())
 						layer.bias.initializer.run(session=K.get_session())
+			freeze_model = False  # flip the flag
 
 		# train the model
 		hwe_history = hwe_model.train_model(X_train, y_train, X_test, y_test, epochs=modelconfig['train_epochs'],
@@ -305,21 +308,22 @@ def main(trial: int = 0, adaptive = True):
 
 		"""create environment with new data"""
 		# Path to a folder where the monitor files will be saved
-		monitor_dir = base_log_path+'Trial_{}/Interval_{}/'.format(trial,Week)
+		monitor_dir = base_log_path+'Interval_{}/'.format(Week)
 		
 		# Arguments to be fed to the custom environment inside make_vec_env
 		env_kwargs = dict(  #  Optional keyword argument to pass to the env constructor
 
-			df=dfscaler.transform(out_df),  # the file for iterating; it is scaled before being passed
+			df=DataFrame(dfscaler.transform(out_df), index=out_df.index,
+			 columns=df.columns),  # the file for iterating; it is scaled before being passed
 			obs_space_vars=obs_space_vars,  # state space variable
 			action_space_vars=action_space_vars,  # action space variable
 			action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the params
 
-			cwe_energy_model=cwe_model,  # trained lstm model
+			cwe_energy_model=load_model(cwe_model_save_dir+'cwe_best_model'),  # trained lstm model
 			cwe_input_vars=cwe_input_vars,  # lstm model input variables
 			cwe_input_shape=(1, 1, len(cwe_input_vars)),  # lstm model input data shape (no_samples, output_timestep, inputdim)
 
-			hwe_energy_model=hwe_model,  # trained lstm model
+			hwe_energy_model=load_model(hwe_model_save_dir+'hwe_best_model'),  # trained lstm model
 			hwe_input_vars=hwe_input_vars,  # lstm model input variables
 			hwe_input_shape=(1, 1, len(hwe_input_vars)),  # lstm model input data shape (no_samples, output_timestep, inputdim)
 
@@ -344,13 +348,13 @@ def main(trial: int = 0, adaptive = True):
 		print("setting environment to train mode..... \n")
 		envmodel.env_method('trainenv')
 
-		if not agent_created | adaptive :
-			# train the agent'+pathinsert+'
+		if (not agent_created) | adaptive :
+			# train the agent
 			print("Training Started... \n")
 			agent = controller.train_agent(agent, env = envmodel, steps=num_rl_steps,
-			tb_log_name='../log/ppo2_event_folder{}'.format(trial))
+			tb_log_name= base_log_path+'ppo2_event_folder')
 		else:
-			print('Retraining aborted as fixed controller will be used... \n')
+			print('Retraining aborted. Fixed controller will be used... \n')
 
 
 		"""test rl model"""
@@ -370,11 +374,11 @@ def main(trial: int = 0, adaptive = True):
 		Week += 1  # shift to the next week
 		agent_created = True  # flip the agent_created flag
 		cwe_created = True  # flip the flag
-		freeze_model = False  # flip the flag
+		hwe_created = True  # flip the flag
 
 # wrap the environment in the vectorzied wrapper with SubprocVecEnv
 # run the environment inside if __name__ == '__main__':
 
 if __name__ == '__main__':
-	main()
+	main(trial = 0, adaptive = True)
 	print("Done!")
