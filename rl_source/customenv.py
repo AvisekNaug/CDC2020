@@ -100,7 +100,7 @@ class Env(gym.Env):
 		self.train_data_limit = int(self.slicepoint * self.nrows)
 		self.test_data_limit = self.nrows
 		# episode_length: dictates number of steps in an episode
-		self.episode_length = 200  # self.train_data_limit
+		self.episode_length = 20  # self.train_data_limit
 		# Used to store the old historical action for comparison
 		self.hist_a = None
 		# Information about the reward params
@@ -175,9 +175,11 @@ class Env(gym.Env):
 
 		'''Energy reward'''
 		# calculate rl based energy for the this time step
-		rl_energy = self.energy_cost(s, a)
+		cwe_rl_energy, hwe_rl_energy = self.energy_cost(s, a)
 		# historical energy for this time step
-		hist_energy = self.energy_cost(s, self.hist_a)
+		cwe_hist_energy, hwe_hist_energy = self.energy_cost(s, self.hist_a)
+		rl_energy = cwe_rl_energy + hwe_rl_energy
+		hist_energy = cwe_hist_energy + hwe_hist_energy
 		# 'energy_saved' reward if at least 'energy_savings_thresh' energy saved else 'energy_penalty' reward
 		reward_energy = self.params['energy_saved'] if hist_energy-rl_energy>self.params['energy_savings_thresh'] \
 			else self.params['energy_penalty']
@@ -201,8 +203,10 @@ class Env(gym.Env):
 
 		if self.testing:
 			step_info = {'datetime': str(s.index[0]),
-						'energy': rl_energy,
-						'baseline_energy':hist_energy,
+						'rl_cwe': cwe_rl_energy,
+						'rl_hwe': hwe_rl_energy,
+						'hist_cwe':cwe_hist_energy,
+						'hist_hwe':hwe_hist_energy,
 						'reward_energy': reward_energy,
 						'reward_comfort': reward_comfort,
 						'oat': s.loc[s.index[0], 'oat'],
@@ -246,7 +250,7 @@ class Env(gym.Env):
 		# convert to array and reshape
 		hwe_in_obs = hwe_in_obs.to_numpy().reshape(self.hwe_input_shape)
 
-		return float(self.cwe_model.predict(cwe_in_obs, batch_size=1).flatten()) +\
+		return float(self.cwe_model.predict(cwe_in_obs, batch_size=1).flatten()), \
 			float(self.hwe_model.predict(hwe_in_obs, batch_size=1).flatten())
 
 

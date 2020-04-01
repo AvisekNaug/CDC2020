@@ -169,7 +169,7 @@ def main(trial: int = 0, adaptive = True):
 	'lstm_no_layers': 2,
 	'dense_hidden_units':8,
 	'dense_no_layers': 4,
-	'train_epochs':50,
+	'train_epochs':5,
 	'retrain_from_layers':2
 	}  # model config for creating energy model
 
@@ -242,11 +242,12 @@ def main(trial: int = 0, adaptive = True):
 	initial_epoch_cwe, initial_epoch_hwe = 0, 0
 	freeze_model = True
 	reinitialize = True
+	writeheader = True
 
 	Week = 0
 
 
-	for out_df, cwe_week, hwe_week in zip(out_dflist, cwe_week_list, hwe_week_list):
+	for out_df, cwe_week, hwe_week in zip(out_dflist[:4], cwe_week_list[:4], hwe_week_list[:4]):
 		
 		"""train lstm model on cwe"""
 		# load the data arrays
@@ -383,15 +384,16 @@ def main(trial: int = 0, adaptive = True):
 		test_perf_log = controller.test_agent(best_model_path, envmodel, num_episodes=1)
 
 		# save the agent performance on test data
-		lu.rl_perf_save(test_perf_log, log_dir)
+		lu.rl_perf_save(test_perf_log, log_dir, save_as='csv', header=writeheader)
 
 		Week += 1  # shift to the next week
 		agent_created = True  # flip the agent_created flag
 		cwe_created = True  # flip the flag
 		hwe_created = True  # flip the flag
+		writeheader = False # flip the flag
 	
 	# plot the results
-	pu.reward_agg_plot([0], 0, Week, './log/adaptive/', './models/adaptive/Trial_0/', 0)
+	pu.reward_agg_plot([0], 0, Week, '../log/'+pathinsert+'/', '../models/'+pathinsert+'/Trial_{}/'.format(trial), 0)
 
 # wrap the environment in the vectorzied wrapper with SubprocVecEnv
 # run the environment inside if __name__ == '__main__':
