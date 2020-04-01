@@ -112,7 +112,7 @@ def test_agent(agent_weight_path: str, env, num_episodes = 1):
 	
 	"""
 	# create the list of classes which will help store the performance metrics
-	perf_metrics_list = [performancemetrics()]*env.num_envs
+	perf_metrics_list = [performancemetrics() for _ in range(env.num_envs)]
 
 	for _ in range(num_episodes):
 
