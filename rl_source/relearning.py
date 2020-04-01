@@ -168,11 +168,11 @@ def main(trial: int = 0, adaptive = True):
 	'lstm_no_layers': 2,
 	'dense_hidden_units':8,
 	'dense_no_layers': 4,
-	'train_epochs':5,
+	'train_epochs':2000,
 	'retrain_from_layers':2
 	}  # model config for creating energy model
 
-	num_rl_steps = 10000  # steps to train the rl agent
+	num_rl_steps = 30000  # steps to train the rl agent
 	n_envs = 2  # always make sure that the number of environments is even; can also be os.cpu_count()
 	obs_space_vars=['oat', 'orh', 'ghi', 'sat', 'avg_stpt', 'flow']  # rl state space
 	action_space_vars=['sat']  # rl action space
