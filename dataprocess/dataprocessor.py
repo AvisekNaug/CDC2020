@@ -22,6 +22,7 @@ import scipy.signal as signal
 
 
 from matplotlib import pyplot as plt
+from matplotlib.dates import date2num
 
 
 # sources of data for which processing can be done
@@ -372,18 +373,25 @@ def dataframeplot(df, lazy = True, style = 'b--', ylabel : str = 'Y-axis', xlabe
 		legend {bool} -- whether we want ot see legends. Turned off for many columns (default: {False})
 	"""
 
+	df_dates = df.index
+	dates_num = date2num(list(df_dates))
+
 	if not lazy:
 		width, height = 20, int(df.shape[1]*3)
 		plt.rcParams["figure.figsize"] = (width, height)
-		_, ax = plt.subplots(nrows = df.shape[1], squeeze=False)
+		_, ax = plt.subplots(nrows = df.shape[1], squeeze=False, constrained_layout=True)
 		for i,j in zip(df.columns,range(df.shape[1])):
-			df.plot(y=[i],ax=ax[j][0],style=[style], legend=legend)
-		ax[j][0].set_xlabel(xlabel)
-		ax[j][0].set_ylabel(ylabel)
+			#df.plot(y=[i],ax=ax[j][0],style=[style], legend=legend)
+			ax[j][0].plot_date(dates_num, df[i], style, label=i)
+			ax[j][0].set_xlabel(xlabel)
+			ax[j][0].set_ylabel(i)
+			ax[j][0].legend()
+		plt.show()
 	else:
 		ax = df.plot(y=df.columns, figsize=(20,7), legend=legend, style = [style]*df.shape[1])
 		ax.set_xlabel(xlabel)
 		ax.set_ylabel(ylabel)
+		plt.show()
 
 
 def constantvaluecols(df, limit : Union[float, np.ndarray] = 0.02):
