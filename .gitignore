@@ -4,6 +4,7 @@ vrf.pkl
 /.ipynb_checkpoints
 /.vscode
 /models
+/cdc2020
 *.pyc
 __pycache__
 .ipynb_checkpoints
