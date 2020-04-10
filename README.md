@@ -2,22 +2,17 @@
 
 clone the repository
 
-```
-git clone https://github.com/AvisekNaug/CDC2020.git
+```bash
+git clone --branch macsdr https://github.com/AvisekNaug/CDC2020.git
 
 ```
 
-Create new virtual environment
-```
-python3.6 -m venv cdc2020
-```
-
-Install requirements
-```
-pip install minimalrequirements.txt
+Navigate to repo directory
+```bash
+cd CDC2020
 ```
 
-
-Open the notebooks to run the energy model training code
- - AHU Energy Training.ipynb
- - adjust LSTM and dense model weights by adjusting the lists
+execute the setupvenv shell script for quick set up
+```bash
+source setupvenv.sh
+```
