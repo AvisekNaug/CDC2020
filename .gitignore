@@ -1,5 +1,6 @@
 /data/raw
 vrf.pkl
+vrf_interpolated.pkl
 /log
 /.ipynb_checkpoints
 /.vscode
