@@ -557,7 +557,7 @@ def sample_timeseries_df(df, period=1):
 	:param period: number of 5 min time points
 	:return: sampled dataframe
 	"""
-	
+	assert period<=12, "This function is only designed for less than 1 hour sampling"
 	timegap = period * 5
 
 	return df[df.index.minute % timegap == 0]
@@ -608,8 +608,10 @@ def old_req_seq_chunks(dflist,days=7,hours=0):
 		chunks = (h.index[-1]-h.index[0])//pd.Timedelta(str(days)+' days '+str(hours)+' hours')
 		timeloc = h.index[0]
 		for _ in range(chunks):
-			dfchunks.append(h.loc[timeloc : timeloc + pd.DateOffset(days=days,hours=hours),:])
-			timeloc = timeloc + pd.DateOffset(days=days,hours=hours,minutes = 5)
+			dfchunks.append(h.loc[timeloc : timeloc + pd.DateOffset(days=days,hours=hours)
+														-pd.DateOffset(minutes=5),:])
+			# dfchunks.append(h.loc[timeloc : timeloc + pd.Timedelta(str(days)+' days '+str(hours)+' hours'),:])
+			timeloc = timeloc + pd.DateOffset(days=days,hours=hours)
 
 	return dfchunks
 
@@ -840,7 +842,7 @@ def createlag(df, outputcols: list, lag: int = -1):
 	return df2
 
 
-def df2arrays(df, split: float = 0.75, shuffle: bool = False, predictorcols : list = [], outputcols: list = [], \
+def df2arrays(df, split, shuffle: bool = False, predictorcols : list = [], outputcols: list = [], \
  lag: int = -1, scaling : bool = False, feature_range = (0,1), reshaping : bool = True, input_timesteps: int = 1, \
 	 output_timesteps: int = 1, X_scale = None, y_scale = None):
 	"""
@@ -884,8 +886,13 @@ def df2arrays(df, split: float = 0.75, shuffle: bool = False, predictorcols : li
 		y = y_scaler.transform(y)
 
 
-	# 2 Shuffle the dataframe rows if needed before and divide the dataframe into train and test sets
-	X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1-split, shuffle=shuffle)  
+	if type(split) == float:
+
+		# 2 Shuffle the dataframe rows if needed before and divide the dataframe into train and test sets
+		X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1-split, shuffle=shuffle)
+	else:
+		# 2 Shuffle the dataframe rows if needed before and divide the dataframe into train and test sets
+		X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=split, shuffle=shuffle) 
 	"""
 	X_train.shape =(samplesize, len(predictorcols))
 	y_train.shape =(samplesize, len(outputcols))
