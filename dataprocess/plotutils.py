@@ -87,11 +87,11 @@ saveloc, scaling: bool, Xscaler, yscaler, lag: int = -1, outputdim_names : list 
 			# plot target
 			axs[i+j, 0].plot_date(xs, _target[:, j, i], 'g*-', label='Actual '+outputdim_names[i])
 			# plot other variables: temperature
-			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 0], 'b3-', label='Outside Air Temperature')
+			# axs[i+j, 0].plot_date(xs, _X_var[:, 0, 0], 'b3-', label='Outside Air Temperature')
 			# plot other variables: relative humidity
-			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 1], 'm4-', label='Outside Air Rel Humidity')
+			# axs[i+j, 0].plot_date(xs, _X_var[:, 0, 1], 'm4-', label='Outside Air Rel Humidity')
 			# plot other variables: Supply Air Temperature
-			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 2], 'k^-', label='Supply Air Temperature')
+			# axs[i+j, 0].plot_date(xs, _X_var[:, 0, 2], 'k^-', label='Supply Air Temperature')
 			# plot other variables: flow value
 			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 4], 'c>-', label='Hot Water Flow Rate')
 			# plot other variables: flow value
