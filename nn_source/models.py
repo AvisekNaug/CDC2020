@@ -450,7 +450,7 @@ class hybrid_seq2seq_model():
 
 		return [self.preds_train, self.preds_test]
 
-class simple_LSTM_model():
+class stateful_LSTM_model():
 	"""Much simpler LSTM model: right now will take only n time
 	 step input and n'=n time step output. Will add n!= n' later.
 	"""
@@ -492,7 +492,7 @@ class simple_LSTM_model():
 
 	# Create the network
 	def design_network(self, lstmhiddenlayers: list = [64, 64], densehiddenlayers: list = [], 
-	dropoutlist: list = [[],[]], batchnormalizelist : list = [[],[]]):
+	dropoutlist: list = [[],[]], batchnormalizelist : list = [[],[]], initial_state: list = []):
 
 		self.lstmhiddenlayers = lstmhiddenlayers
 		self.densehiddenlayers = densehiddenlayers
@@ -524,17 +524,29 @@ class simple_LSTM_model():
 		
 		
 		# Design the network
-		self.input_data = Input(batch_shape=(None, self.input_timesteps, self.inputdim))
+		self.input_data = Input(batch_shape=(self.batch_size, self.input_timesteps, self.inputdim))
 		self.input_layer = self.input_data
 		return_seqs_list = [True]*len(lstmhiddenlayers)
 
+		self.hc_list = []
+
 		# LSTM layers
-		for no_units, dropout, normalize, return_seqs in zip(lstmhiddenlayers,
+		for no_units, dropout, normalize, return_seqs, st_idx in zip(lstmhiddenlayers,
 		 										dropoutlist[0],
 		  										batchnormalizelist[0],
-												return_seqs_list):
+												return_seqs_list,
+												range(len(return_seqs_list))):
 
-			self.input_layer = LSTM(no_units, return_sequences=return_seqs, stateful = self.stateful)(self.input_layer)
+			if initial_state:
+				self.input_layer, hd, cl = LSTM(no_units, return_sequences=return_seqs,
+				 return_state=True, stateful = self.stateful)(self.input_layer,
+				  initial_state=initial_state[st_idx])
+			else:
+				self.input_layer, hd, cl = LSTM(no_units, return_sequences=return_seqs, return_state=True,
+									 stateful = self.stateful)(self.input_layer)
+
+			self.hc_list.append(hd)
+			self.hc_list.append(cl)
 
 			if dropout:
 				self.input_layer = Dropout(0.2)(self.input_layer)
@@ -543,7 +555,7 @@ class simple_LSTM_model():
 				self.input_layer = BatchNormalization()(self.input_layer)
 
 		# Dense layers
-		activationlist = ['linear']*(len(densehiddenlayers)-1) + ['linear']  # relu activation for all dense layers exept last
+		activationlist = ['relu']*(len(densehiddenlayers)-1) + ['relu']  # relu activation for all dense layers exept last
 		for no_units, dropout, normalize, activation in zip(densehiddenlayers, dropoutlist[1],
 															 batchnormalizelist[1], activationlist):
 
@@ -555,11 +567,11 @@ class simple_LSTM_model():
 			if normalize:
 				self.input_layer = BatchNormalization()(self.input_layer)
 
-		self.model = Model(inputs=self.input_data, outputs=self.input_layer)
+		self.model = Model(inputs=self.input_data, outputs=[self.input_layer]+self.hc_list)
 
 	def model_compile(self,):
 		# compile model
-		self.model.compile(loss=self.modelerror, optimizer=self.optimizer)
+		self.model.compile(loss=[self.modelerror]+[None]*len(self.hc_list), optimizer=self.optimizer)
 
 
 	def show_model(self,):
@@ -568,13 +580,13 @@ class simple_LSTM_model():
 	def model_callbacks(self,):
 
 		self.modelchkpoint = ModelCheckpoint(self.saveloc+'LSTM_model_best',
-		 monitor = 'val_loss', save_best_only = True, period=2)
+		 monitor = 'loss', save_best_only = True, period=2)
 
-		self.earlystopping = EarlyStopping(monitor = 'val_loss', patience=8, restore_best_weights=True)
+		self.earlystopping = EarlyStopping(monitor = 'loss', patience=5, restore_best_weights=True)
 
-		self.reduclronplateau = ReduceLROnPlateau(monitor = 'val_loss', patience=2, cooldown = 3)
+		self.reduclronplateau = ReduceLROnPlateau(monitor = 'loss', patience=2, cooldown = 3)
 
-		self.tbCallBack = TensorBoard(log_dir=self.saveloc+'loginfo', batch_size=self.batch_size, histogram_freq=5,
+		self.tbCallBack = TensorBoard(log_dir=self.saveloc+'loginfo', batch_size=self.batch_size, histogram_freq=0,
 		 write_graph=False, write_images=False, write_grads=True)
 
 		self.cb_list = [self.modelchkpoint, self.earlystopping, self.reduclronplateau, self.tbCallBack]
@@ -582,14 +594,14 @@ class simple_LSTM_model():
 		return self.cb_list
 
 	
-	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 100, saveModel: bool = False, initial_epoch = 0):
+	def train_model(self, X_train, y_train, epochs: int = 100, saveModel: bool = False, initial_epoch = 0):
 
 		# Number of epochs to run
 		self.epochs = epochs
 
 		# train the model
 		self.history = self.model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, \
-			validation_data=(X_val, y_val) , verbose=2, shuffle=False,initial_epoch = initial_epoch, \
+			verbose=2, shuffle=False,initial_epoch = initial_epoch, \
 				callbacks=self.model_callbacks())
 
 		if saveModel:
@@ -602,25 +614,33 @@ class simple_LSTM_model():
 
 			self.model.save(self.saveloc+'LSTM_model_{:02d}epochs.hdf5'.format(self.epochs))
 
-	def evaluate_model(self, X_train, y_train, X_test, y_test, y_sc,
+	def get_final_state(self, X_test):
+		# reset previous states
+		self.model.reset_states()
+		#extract hidden and cell states
+		self.preds_test = self.model.predict(X_test, batch_size=self.batch_size)
+		return self.preds_test[1:]
+
+	def evaluate_model(self, X_test, y_test, y_sc,
 					 scaling: bool = True, saveplot: bool = False, Idx: int = 0,
 	 					lag: int = -1, outputdim_names = ['TotalEnergy']):
 	
 
 		# evaluate model on data. output -> (nsamples, output_timesteps, outputdim)
-		self.preds_train = self.model.predict(X_train, batch_size=self.batch_size)
+		# self.preds_train = self.model.predict(X_train, batch_size=self.batch_size)
 		self.preds_test = self.model.predict(X_test, batch_size=self.batch_size)
+		self.preds_test = self.preds_test[0]
 
 		for i in range(self.outputdim):
 			for j in range(self.output_timesteps):
 
-				# log error on training data
-				rmse = sqrt(mean_squared_error(self.preds_train[:, j, i], y_train[:, j, i]))
-				cvrmse = 100*(rmse/np.mean(y_train[:, j, i]))
-				mae = mean_absolute_error(self.preds_train[:, j, i], y_train[:, j, i])
-				file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','a')
-				file.write('{}-Time Step {}: Train RMSE={} |Train CVRMSE={} |Train MAE={}\n'.format(Idx,j+1, rmse, cvrmse, mae))
-				file.close()
+				# # log error on training data
+				# rmse = sqrt(mean_squared_error(self.preds_train[:, j, i], y_train[:, j, i]))
+				# cvrmse = 100*(rmse/np.mean(y_train[:, j, i]))
+				# mae = mean_absolute_error(self.preds_train[:, j, i], y_train[:, j, i])
+				# file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','a')
+				# file.write('{}-Time Step {}: Train RMSE={} |Train CVRMSE={} |Train MAE={}\n'.format(Idx,j+1, rmse, cvrmse, mae))
+				# file.close()
 
 				# log error on test data
 				rmse = sqrt(mean_squared_error(self.preds_test[:, j, i], y_test[:, j, i]))
@@ -632,12 +652,12 @@ class simple_LSTM_model():
 
 		if saveplot:
 
-			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
-			 self.preds_train, y_train, self.saveloc, scaling, y_sc, lag = -1, outputdim_names = outputdim_names,
-			 typeofplot="train",Idx=Idx)
+			# pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
+			#  self.preds_train, y_train, self.saveloc, scaling, y_sc, lag = -1, outputdim_names = outputdim_names,
+			#  typeofplot="train",Idx=Idx)
 
 			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
 			 self.preds_test, y_test, self.saveloc, scaling, y_sc, lag = -1, outputdim_names = outputdim_names,
 			 typeofplot="test",Idx=Idx)
 
-		return [self.preds_train, self.preds_test]
+		return self.preds_test

@@ -83,9 +83,9 @@ saveloc, scaling: bool, Xscaler, yscaler, lag: int = -1, outputdim_names : list 
 	for i in range(outputdim):
 		for j in range(output_timesteps):
 			# plot predicted
-			axs[i+j, 0].plot_date(xs, _pred[:, j, i], 'ro-', label='Predicted'+outputdim_names[i])
+			axs[i+j, 0].plot_date(xs, _pred[:, j, i], 'ro-', label='Predicted '+outputdim_names[i])
 			# plot target
-			axs[i+j, 0].plot_date(xs, _target[:, j, i], 'g*-', label='Actual'+outputdim_names[i])
+			axs[i+j, 0].plot_date(xs, _target[:, j, i], 'g*-', label='Actual '+outputdim_names[i])
 			# plot other variables: temperature
 			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 0], 'b3-', label='Outside Air Temperature')
 			# plot other variables: relative humidity
@@ -94,6 +94,8 @@ saveloc, scaling: bool, Xscaler, yscaler, lag: int = -1, outputdim_names : list 
 			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 2], 'k^-', label='Supply Air Temperature')
 			# plot other variables: flow value
 			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 4], 'c>-', label='Hot Water Flow Rate')
+			# plot other variables: flow value
+			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 6], 'y>-', label='HX Valve')
 			# Plot Properties
 			axs[i+j, 0].set_title('Predicted vs Actual at time = t + {} for {}'.format(-1*lag+j, outputdim_names[i]))
 			axs[i+j, 0].set_xlabel('Time points at {} minute(s) intervals'.format(timegap))
