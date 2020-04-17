@@ -36,9 +36,9 @@ def pred_v_target_plot(timegap, outputdim, output_timesteps, preds, target,
 	for i in range(outputdim):
 		for j in range(output_timesteps):
 			# plot predicted
-			axs[i+j, 0].plot(_preds[:, j, i], 'r--', label='Predicted'+outputdim_names[i])
+			axs[i+j, 0].plot(_preds[:, j, i], 'r--', label='Predicted '+outputdim_names[i])
 			# plot target
-			axs[i+j, 0].plot(_target[:, j, i], 'g--', label='Actual'+outputdim_names[i])
+			axs[i+j, 0].plot(_target[:, j, i], 'g--', label='Actual '+outputdim_names[i])
 			# Plot Properties
 			axs[i+j, 0].set_title('Predicted vs Actual at time = t + {} for {}'.format(-1*lag+j, outputdim_names[i]))
 			axs[i+j, 0].set_xlabel('Time points at {} minute(s) intervals'.format(timegap))
@@ -49,7 +49,7 @@ def pred_v_target_plot(timegap, outputdim, output_timesteps, preds, target,
 	fig.savefig(saveloc+str(timegap)+'min_LSTM_'+typeofplot+'_prediction-{}.pdf'.format(Idx), bbox_inches='tight')
 	plt.close(fig)
     
-def detailedplot(timegap, xs, outputdim, output_timesteps, input_timesteps, pred, target, X_var,
+def detailedplot(timegap, xs, outputdim, output_timesteps, input_timesteps, pred, target, X_var, x_loc, x_lab,
 saveloc, scaling: bool, Xscaler, yscaler, lag: int = -1, outputdim_names : list = [], typeofplot: str = 'train', 
 				Idx: str = ''):
 	
@@ -77,28 +77,22 @@ saveloc, scaling: bool, Xscaler, yscaler, lag: int = -1, outputdim_names : list 
 	if not saveloc.endswith('/'):
 			saveloc += '/'
 
-
+	sample_styles = ['b3', 'c>', 'y^', 'm4', 'k*', 'm>', 'c^']
 	# training output
 	fig, axs = plt.subplots(nrows = outputdim*output_timesteps, squeeze=False)
 	for i in range(outputdim):
 		for j in range(output_timesteps):
 			# plot predicted
-			axs[i+j, 0].plot_date(xs, _pred[:, j, i], 'ro-', label='Predicted '+outputdim_names[i])
+			axs[i+j, 0].plot_date(xs, _pred[:, j, i], 'ro', label='Predicted '+outputdim_names[i])
 			# plot target
-			axs[i+j, 0].plot_date(xs, _target[:, j, i], 'g*-', label='Actual '+outputdim_names[i])
-			# plot other variables: temperature
-			# axs[i+j, 0].plot_date(xs, _X_var[:, 0, 0], 'b3-', label='Outside Air Temperature')
-			# plot other variables: relative humidity
-			# axs[i+j, 0].plot_date(xs, _X_var[:, 0, 1], 'm4-', label='Outside Air Rel Humidity')
-			# plot other variables: Supply Air Temperature
-			# axs[i+j, 0].plot_date(xs, _X_var[:, 0, 2], 'k^-', label='Supply Air Temperature')
-			# plot other variables: flow value
-			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 4], 'c>-', label='Hot Water Flow Rate')
-			# plot other variables: flow value
-			axs[i+j, 0].plot_date(xs, _X_var[:, 0, 6], 'y>-', label='HX Valve')
+			axs[i+j, 0].plot_date(xs, _target[:, j, i], 'g*', label='Actual '+outputdim_names[i])
+			# plot other variables
+			for idx, name, style in zip(x_loc, x_lab,sample_styles):
+				axs[i+j, 0].plot_date(xs, _X_var[:, 0, idx], style, label=name)
 			# Plot Properties
 			axs[i+j, 0].set_title('Predicted vs Actual at time = t + {} for {}'.format(-1*lag+j, outputdim_names[i]))
-			axs[i+j, 0].set_xlabel('Time points at {} minute(s) intervals'.format(timegap))
+			#axs[i+j, 0].set_xlabel('Time points at {} minute(s) intervals'.format(timegap))
+			axs[i+j, 0].set_xlabel('DateTime')
 			axs[i+j, 0].set_ylabel('Different Variables')
 			axs[i+j, 0].grid(which='both',alpha=100)
 			axs[i+j, 0].minorticks_on()
@@ -113,7 +107,7 @@ def single_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 
  title: str = 'Title', xticktype: str = 'Bar', xticklist = None, plotwidth = None, plotheight = 15, fontsize = 16):
 
 	if plotwidth is None:
-		plt.rcParams["figure.figsize"] = (0.6*len(bars),plotheight)
+		plt.rcParams["figure.figsize"] = (0.6*len(bars), plotheight)
 	else:
 		plt.rcParams["figure.figsize"] = (plotwidth,plotheight)
 	font = {'size':fontsize, 'family': "Times New Roman"}
@@ -146,7 +140,10 @@ def single_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 
 
 	if bar_annotate:
 		for i, v in enumerate(bars):
-			plt.text(i - 0.30, bars[i], '{0:.1f}%'.format(np.abs(v)), color='g', fontweight='bold', fontsize=13, rotation= 0)
+			plt.text(i - 0.30, bars[i] + 0.05, '{0:.1f}%'.format(np.abs(v)), color='g',
+			 fontweight='bold', fontsize=9, rotation= 90)
+			plt.text(i - 0.30, 5, str(i+1), color='k',
+			 fontweight='bold', fontsize=9, rotation= 0)
 
 	if saveplot:
 		# attach forward slash if saveloc does not have one
