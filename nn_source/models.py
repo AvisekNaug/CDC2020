@@ -605,7 +605,7 @@ class simple_LSTM_model():
 
 			self.model.save(self.saveloc+'LSTM_model_{:02d}epochs.hdf5'.format(self.epochs))
 
-	def evaluate_model(self, X_test, y_test, y_sc,
+	def evaluate_model(self, X_test, y_test, y_sc, save_plot_loc,
 					 scaling: bool = True, saveplot: bool = False, Idx: int = 0,
 	 					lag: int = -1, outputdim_names = ['TotalEnergy']):
 	
@@ -629,7 +629,7 @@ class simple_LSTM_model():
 
 
 			pred_v_target_plot(self.timegap, self.outputdim, self.output_timesteps,
-			 self.preds_test, y_test, self.saveloc, scaling, y_sc, lag = -1, outputdim_names = outputdim_names,
+			 self.preds_test, y_test, save_plot_loc, scaling, y_sc, lag = -1, outputdim_names = outputdim_names,
 			 typeofplot="test",Idx=Idx)
 
 		return self.preds_test
