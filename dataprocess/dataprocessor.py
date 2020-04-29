@@ -586,6 +586,15 @@ def subsequencing(df, period=1):
 
 	return dflist
 
+from pandas import Timedelta
+def df_list_reshape(datablock_df, period):
+    new_df_list = []
+    for i in range(int(10080 / (5 * period))):
+        new_df_list.append(
+            datablock_df[(datablock_df.index - datablock_df.index[i]) %
+                         Timedelta('7 days') == '0 days 00:00:00'])
+    return new_df_list
+
 
 def old_req_seq_chunks(dflist,days=7,hours=0):
 	"""Divide dataframes larger than minimum sequence length into minimum sequence length chunks

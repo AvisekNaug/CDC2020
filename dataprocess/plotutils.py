@@ -51,7 +51,7 @@ def pred_v_target_plot(timegap, outputdim, output_timesteps, preds, target,
     
 def detailedplot(timegap, xs, outputdim, output_timesteps, input_timesteps, pred, target, X_var, x_loc, x_lab,
 saveloc, scaling: bool, Xscaler, yscaler, lag: int = -1, outputdim_names : list = [], typeofplot: str = 'train', 
-				Idx: str = ''):
+				Idx: str = '', extradata=None):
 	
 	if not outputdim_names:
 		outputdim_names = ['Output']*outputdim
@@ -77,18 +77,20 @@ saveloc, scaling: bool, Xscaler, yscaler, lag: int = -1, outputdim_names : list 
 	if not saveloc.endswith('/'):
 			saveloc += '/'
 
-	sample_styles = ['b3', 'c>', 'y^', 'm4', 'k*', 'm>', 'c^']
+	sample_styles = ['b3-', 'c>-', 'y^-', 'm4-', 'k*-', 'm>-', 'c^-']
 	# training output
 	fig, axs = plt.subplots(nrows = outputdim*output_timesteps, squeeze=False)
 	for i in range(outputdim):
 		for j in range(output_timesteps):
 			# plot predicted
-			axs[i+j, 0].plot_date(xs, _pred[:, j, i], 'ro', label='Predicted '+outputdim_names[i])
+			axs[i+j, 0].plot_date(xs, _pred[:, j, i], 'ro-', label='Predicted '+outputdim_names[i])
 			# plot target
-			axs[i+j, 0].plot_date(xs, _target[:, j, i], 'g*', label='Actual '+outputdim_names[i])
+			axs[i+j, 0].plot_date(xs, _target[:, j, i], 'g*-', label='Actual '+outputdim_names[i])
 			# plot other variables
 			for idx, name, style in zip(x_loc, x_lab,sample_styles):
 				axs[i+j, 0].plot_date(xs, _X_var[:, 0, idx], style, label=name)
+			if extradata is not None:
+				axs[i+j, 0].plot_date(xs, 100*extradata, 'k*-', label='On-Off-State(Predicted)')
 			# Plot Properties
 			axs[i+j, 0].set_title('Predicted vs Actual at time = t + {} for {}'.format(-1*lag+j, outputdim_names[i]))
 			#axs[i+j, 0].set_xlabel('Time points at {} minute(s) intervals'.format(timegap))
@@ -127,6 +129,7 @@ def single_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 
 		plt.xticks(ind, [xticktype + str(i) for i in range(1, N + 1)], rotation = 45)
 	else:
 		plt.xticks(ind, xticklist, rotation = 90)
+	plt.ylim((0,max(bars)+10))
 	plt.ylabel(ylabel)
 	plt.xlabel(xlabel)
 	plt.title(title)
@@ -140,7 +143,7 @@ def single_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 
 
 	if bar_annotate:
 		for i, v in enumerate(bars):
-			plt.text(i - 0.30, bars[i] + 0.05, '{0:.1f}%'.format(np.abs(v)), color='g',
+			plt.text(i - 0.30, bars[i] + 0.35, '{0:.1f}%'.format(np.abs(v)), color='g',
 			 fontweight='bold', fontsize=9, rotation= 90)
 			plt.text(i - 0.30, 5, str(i+1), color='k',
 			 fontweight='bold', fontsize=9, rotation= 0)
