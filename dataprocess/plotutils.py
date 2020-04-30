@@ -48,8 +48,9 @@ def pred_v_target_plot(timegap, outputdim, output_timesteps, preds, target,
 			axs[i+j, 0].minorticks_on()
 	fig.savefig(saveloc+str(timegap)+'min_LSTM_'+typeofplot+'_prediction-{}.pdf'.format(Idx), bbox_inches='tight')
 	plt.close(fig)
-    
-def detailedplot(timegap, xs, outputdim, output_timesteps, input_timesteps, pred, target, X_var, x_loc, x_lab,
+
+  
+def regression_plot(timegap, xs, outputdim, output_timesteps, input_timesteps, pred, target, X_var, x_loc, x_lab,
 saveloc, scaling: bool, Xscaler, yscaler, lag: int = -1, outputdim_names : list = [], typeofplot: str = 'train', 
 				Idx: str = '', extradata=None):
 	
@@ -104,9 +105,61 @@ saveloc, scaling: bool, Xscaler, yscaler, lag: int = -1, outputdim_names : list 
 	plt.close(fig)
 
 
-def single_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 0.50, smoothcurve: bool = False,
+def classification_plot(timegap, xs, input_timesteps, pred, target, X_var, x_loc, x_lab,
+				saveloc, scaling: bool, Xscaler, lag: int = -1, outputdim_names : list = [],
+				 typeofplot: str = 'train', 
+				Idx: str = ''):
+
+	if not outputdim_names:
+		outputdim_names = ['Output']
+		
+	_pred = pred
+	_target = target
+	_X_var = np.empty_like(X_var)
+
+	plt.rcParams["figure.figsize"] = (15, 5)
+	font = {'size':16}
+	plt.rc('font',**font)
+	plt.rc('legend',**{'fontsize':14})
+
+	# Inerse scaling the data for each time step
+	if scaling:
+		for j in  range(input_timesteps):
+			_X_var[:,j,:] = Xscaler.inverse_transform(X_var[:,j,:])     
+
+	# attach forward slash if saveloc does not have one
+	if not saveloc.endswith('/'):
+			saveloc += '/'
+
+	sample_styles = ['b3-', 'c>-', 'y^-', 'm4-', 'k*-', 'm>-', 'c^-']
+	# training output
+	fig, axs = plt.subplots(nrows = 1, squeeze=False)
+	for i in range(1):
+		for j in range(1):
+			# plot predicted
+			axs[i+j, 0].plot_date(xs, 100*_pred, 'ro-', label='Predicted '+outputdim_names[i])
+			# plot target
+			axs[i+j, 0].plot_date(xs, 100*_target, 'g*-', label='Actual '+outputdim_names[i])
+			# plot other variables
+			for idx, name, style in zip(x_loc, x_lab,sample_styles):
+				axs[i+j, 0].plot_date(xs, _X_var[:, 0, idx], style, label=name)
+			# Plot Properties
+			axs[i+j, 0].set_title('Predicted vs Actual at time = t + {} for {}'.format(-1*lag+j, outputdim_names[i]))
+			#axs[i+j, 0].set_xlabel('Time points at {} minute(s) intervals'.format(timegap))
+			axs[i+j, 0].set_xlabel('DateTime')
+			axs[i+j, 0].set_ylabel('Different Variables')
+			axs[i+j, 0].grid(which='both',alpha=100)
+			axs[i+j, 0].minorticks_on()
+			axs[i+j, 0].legend(loc='upper left', bbox_to_anchor=(1.0, 1.0))
+	fig.savefig(saveloc+str(timegap)+'min_LSTM_detailed_'+typeofplot+'_plot-{}.pdf'.format(Idx), bbox_inches='tight')
+	plt.gcf().autofmt_xdate()
+	plt.close(fig)	
+
+
+def regression_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 0.50, smoothcurve: bool = False,
  bar_annotate: bool = False, saveplot: bool = False, plot_name: str = 'BarPlot', xlabel: str = 'Xlabel', ylabel: str = 'ylabel',
- title: str = 'Title', xticktype: str = 'Bar', xticklist = None, plotwidth = None, plotheight = 15, fontsize = 16):
+ title: str = 'Title', xticktype: str = 'Bar', xticklist = None, plotwidth = None, plotheight = 15, fontsize = 16, 
+ savetitle = 'Error Bar Plot.png'):
 
 	if plotwidth is None:
 		plt.rcParams["figure.figsize"] = (0.6*len(bars), plotheight)
@@ -152,7 +205,59 @@ def single_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 
 		# attach forward slash if saveloc does not have one
 		if not saveloc.endswith('/'):
 			saveloc += '/'
-		plt.savefig(saveloc + 'Error Bar Plot.png', bbox_inches='tight', dpi=300)
+		plt.savefig(saveloc + savetitle, bbox_inches='tight', dpi=300)
+
+
+def classification_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 0.50, smoothcurve: bool = False,
+ bar_annotate: bool = False, saveplot: bool = False, plot_name: str = 'BarPlot', xlabel: str = 'Xlabel', ylabel: str = 'ylabel',
+ title: str = 'Title', xticktype: str = 'Bar', xticklist = None, plotwidth = None, plotheight = 15, fontsize = 16, 
+ savetitle = 'Prediction Bar Plot.png'):
+
+	if plotwidth is None:
+		plt.rcParams["figure.figsize"] = (0.6*len(bars), plotheight)
+	else:
+		plt.rcParams["figure.figsize"] = (plotwidth,plotheight)
+	font = {'size':fontsize, 'family': "Times New Roman"}
+	plt.rc('font',**font)
+	plt.rc('legend',**{'fontsize':fontsize})
+
+	N = len(bars)
+	ind = np.arange(N)
+
+	plt.bar(ind,
+	 bars, 
+	 barwidth, 
+	 color=color, 
+	 label=bar_label)
+
+	if xticklist is None:
+		plt.xticks(ind, [xticktype + str(i) for i in range(1, N + 1)], rotation = 45)
+	else:
+		plt.xticks(ind, xticklist, rotation = 90)
+	plt.ylim((0.0,1.2))
+	plt.ylabel(ylabel)
+	plt.xlabel(xlabel)
+	plt.title(title)
+
+	if smoothcurve:
+		T = np.array([i for i in range(len(bars))])
+		xnew = np.linspace(T.min(), T.max(), 300)
+		spl = make_interp_spline(T, bars, k=3)  # type: BSpline
+		power_smooth = spl(xnew)
+		plt.plot(xnew, power_smooth, color='k', alpha=0.8)
+
+	if bar_annotate:
+		for i, v in enumerate(bars):
+			plt.text(i - 0.30, bars[i] + 0.02, '{0:.2f}'.format(np.abs(v)), color='g',
+			 fontweight='bold', fontsize=9, rotation= 90)
+			plt.text(i - 0.30, 0.3, str(i+1), color='k',
+			 fontweight='bold', fontsize=9, rotation= 0)
+
+	if saveplot:
+		# attach forward slash if saveloc does not have one
+		if not saveloc.endswith('/'):
+			saveloc += '/'
+		plt.savefig(saveloc + savetitle, bbox_inches='tight', dpi=300)
 
 
 def reward_agg_plot(trial_list: list, 

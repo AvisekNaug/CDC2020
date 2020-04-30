@@ -21,6 +21,7 @@ class Env(gym.Env):
 				 action_space_bounds: list, 
 				 cwe_energy_model, cwe_input_shape, cwe_input_vars,
 				 hwe_energy_model, hwe_input_shape, hwe_input_vars,
+				 vlv_state_model, vlv_input_shape, vlv_input_vars,
 				 slicepoint = 0.75,
 				 **kwargs):
 
@@ -30,6 +31,7 @@ class Env(gym.Env):
 				 action_space_bounds, 
 				 cwe_energy_model, cwe_input_shape, cwe_input_vars,
 				 hwe_energy_model, hwe_input_shape, hwe_input_vars,
+				 vlv_state_model, vlv_input_shape, vlv_input_vars,
 				 slicepoint =slicepoint,
 				 **kwargs)
 
@@ -61,6 +63,7 @@ class Env(gym.Env):
 				 action_space_bounds: list, 
 				 cwe_energy_model, cwe_input_shape, cwe_input_vars,
 				 hwe_energy_model, hwe_input_shape, hwe_input_vars,
+				 vlv_state_model, vlv_input_shape, vlv_input_vars,
 				 slicepoint = 0.75,
 				 **kwargs):
 		"""Custom method to reinitialize the environment
@@ -88,6 +91,10 @@ class Env(gym.Env):
 		self.hwe_model = hwe_energy_model
 		self.hwe_input_shape = hwe_input_shape
 		self.hwe_input_vars = hwe_input_vars
+		# valve state model
+		self.vlv_model = vlv_state_model
+		self.vlv_input_shape = vlv_input_shape
+		self.vlv_input_vars = vlv_input_vars
 
 		# testing: whether we env is in testing phase or not
 		self.testing = False
@@ -131,8 +138,8 @@ class Env(gym.Env):
 		# process control action
 		a = self.process_action(self.s, a)
 
-		# step to the next state and get new observation and processed action
-		self.s_next, a = self.state_transition(self.s, a)
+		# step to the next state and get new observation
+		self.s_next = self.state_transition(self.s, a)
 
 		# calculate reward and collect information for "info" dinctionary
 		r, step_info = self.reward_calculation(self.s, a, self.s_next)
@@ -166,7 +173,7 @@ class Env(gym.Env):
 		self.row.loc[:,self.action_space_vars] = a
 
 		# Collect observations for next time step and also return processed action
-		return self.row.loc[:, self.obs_space_vars], a
+		return self.row.loc[:, self.obs_space_vars]
 
 
 	def reward_calculation(self, s, a, _):
@@ -235,23 +242,41 @@ class Env(gym.Env):
 		# change old actions to new actions
 		in_obs.loc[:, self.action_space_vars] = a
 		
+		"""cololing energy prediction"""
 		# get input to cwe model
 		cwe_in_obs = in_obs.loc[:, self.cwe_input_vars]
 		# convert to array and reshape
 		cwe_in_obs = cwe_in_obs.to_numpy().reshape(self.cwe_input_shape)
+		# calculate cooling energy
+		cooling_energy = float(self.cwe_model.predict(cwe_in_obs, batch_size=1).flatten())
 
+		"""create inputs for both hwe and vlv_state"""
 		# get input to hwe model: First do some mathematical trickery to get inputs outside obs space
 		# need additional data from df which are not part of the state/observation space
 		temp_row = self.df.iloc[[self.dataptr-1],:].copy()
 		# update temp_row columns with in_obs data
 		temp_row.loc[:, in_obs.columns] = in_obs.to_numpy().flatten()
-		# now select the inputs
-		hwe_in_obs = temp_row.loc[:, self.hwe_input_vars]
-		# convert to array and reshape
-		hwe_in_obs = hwe_in_obs.to_numpy().reshape(self.hwe_input_shape)
 
-		return float(self.cwe_model.predict(cwe_in_obs, batch_size=1).flatten()), \
-			float(self.hwe_model.predict(hwe_in_obs, batch_size=1).flatten())
+		"""valve state prediction"""
+		# now select the inputs
+		vlv_in_obs = temp_row.loc[:, self.vlv_input_vars]
+		# convert to array and reshape
+		vlv_in_obs = vlv_in_obs.to_numpy().reshape(self.vlv_input_shape)
+		# calculate valve state as 0 = off or 1 = on
+		valve_state =  np.argmax(self.vlv_model.predict(vlv_in_obs, batch_size=1).flatten())
+
+		"""heating energy prediction only if valve is on = 1"""
+		if valve_state == 1:
+			# now select the inputs
+			hwe_in_obs = temp_row.loc[:, self.hwe_input_vars]
+			# convert to array and reshape
+			hwe_in_obs = hwe_in_obs.to_numpy().reshape(self.hwe_input_shape)
+			# calculate heating energy
+			heating_energy =  float(self.hwe_model.predict(hwe_in_obs, batch_size=1).flatten())
+		else:
+			heating_energy = 0.0
+
+		return cooling_energy, heating_energy
 
 
 	def process_action(self, s, a):

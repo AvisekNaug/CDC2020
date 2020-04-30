@@ -43,7 +43,7 @@ with warnings.catch_warnings():
 	from keras.models import load_model
 
 	from nn_source import models as mp
-	from rl_source import customenv, controller
+	from rl_source import alumnienv, controller
 	from rl_source import custom_make_env as cme
 
 # Would want to see the warnings
@@ -72,8 +72,11 @@ def prepare_dflist(period):
 
 	period = period  # the period to sample the data at. 1 period= 5 minutes
 
-	dfdata = dp.readfile('../data/processed/buildingdata.pkl')  # read the pickled file for ahu data
-	df = dfdata.return_df(processmethods=['file2df'])  # return pickled df
+	df1data = dp.readfile('../data/processed/buildingdata.pkl')  # read the pickled file for building data
+	df1 = df1data.return_df(processmethods=['file2df'])  # return pickled df
+	df2data = dp.readfile('../data/processed/interpolated/wetbulbtemp.pkl') # read the pickled file for wet bulb data
+	df2 = df2data.return_df(processmethods=['file2df'])  # return pickled df
+	df = dp.merge_df_columns([df1,df2])
 
 	df['{}min_hwe'.format(period*5)] = windowsum(df,window_size=period, column_name='hwe')  # Sum half hour energy data
 	df['{}min_cwe'.format(period*5)] = windowsum(df,window_size=period, column_name='cwe')  # Sum half hour energy data
@@ -227,7 +230,7 @@ def main(trial: int = 0, adaptive = True):
 		}
 	totaldf_stats = DataFrame(dfscaler.transform(totaldf), index=totaldf.index,
 			columns=totaldf.columns).describe().loc[['mean', 'std', 'min', 'max'],:]
-	env_id = customenv.Env  # the environment ID or the environment class
+	env_id = alumnienv.Env  # the environment ID or the environment class
 	start_index = 0  # start rank index
 	vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
 	#######################         End : Prerequisites for the environment     ##################################
@@ -247,7 +250,7 @@ def main(trial: int = 0, adaptive = True):
 	Week = 0
 
 
-	for out_df, cwe_week, hwe_week in zip(out_dflist[:4], cwe_week_list[:4], hwe_week_list[:4]):
+	for out_df, cwe_week, hwe_week in zip(out_dflist, cwe_week_list, hwe_week_list):
 		
 		"""train lstm model on cwe"""
 		# load the data arrays

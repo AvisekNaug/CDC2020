@@ -11,6 +11,7 @@ combination of multiple variable mode variation.
 from math import sqrt
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.metrics import roc_auc_score, classification_report, roc_auc_score
 
 from keras import backend as K
 #import tensorflow as tf
@@ -451,7 +452,7 @@ class hybrid_seq2seq_model():
 
 		return [self.preds_train, self.preds_test]
 
-class simple_LSTM_model():
+class regression_nn():
 	"""Much simpler LSTM model: right now will take only n time
 	 step input and n'=n time step output. Will add n!= n' later.
 	"""
@@ -572,11 +573,11 @@ class simple_LSTM_model():
 	def model_callbacks(self,):
 
 		self.modelchkpoint = ModelCheckpoint(self.saveloc+'LSTM_model_best',
-		 monitor = 'loss', save_best_only = True, period=2)
+		 monitor = 'val_loss', save_best_only = True, period=2)
 
-		self.earlystopping = EarlyStopping(monitor = 'loss', patience=5, restore_best_weights=True)
+		self.earlystopping = EarlyStopping(monitor = 'val_loss', patience=5, restore_best_weights=True)
 
-		self.reduclronplateau = ReduceLROnPlateau(monitor = 'loss', patience=2, cooldown = 3)
+		self.reduclronplateau = ReduceLROnPlateau(monitor = 'val_loss', patience=2, cooldown = 3)
 
 		self.tbCallBack = TensorBoard(log_dir=self.saveloc+'loginfo', batch_size=self.batch_size, histogram_freq=0,
 		 write_graph=False, write_images=False, write_grads=True)
@@ -586,7 +587,7 @@ class simple_LSTM_model():
 		return self.cb_list
 
 	
-	def train_model(self, X_train, y_train, epochs: int = 100, saveModel: bool = False, initial_epoch = 0):
+	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 100, saveModel: bool = False, initial_epoch = 0):
 
 		# Number of epochs to run
 		self.epochs = epochs
@@ -594,7 +595,7 @@ class simple_LSTM_model():
 		# train the model
 		self.history = self.model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, \
 			verbose=2, shuffle=False,initial_epoch = initial_epoch, \
-				callbacks=self.model_callbacks())
+				callbacks=self.model_callbacks(), validation_data=(X_val,y_val))
 
 		if saveModel:
 			self.save_model()
@@ -607,7 +608,7 @@ class simple_LSTM_model():
 			self.model.save(self.saveloc+'LSTM_model_{:02d}epochs.hdf5'.format(self.epochs))
 
 	def evaluate_model(self, X_test, y_test, y_sc, save_plot_loc,
-					 scaling: bool = True, saveplot: bool = False, Idx: int = 0,
+					 scaling: bool = True, saveplot: bool = False, Idx = 0,
 	 					lag: int = -1, outputdim_names = ['TotalEnergy'], output_mean = [0.5]):
 	
 
@@ -634,6 +635,179 @@ class simple_LSTM_model():
 			 typeofplot="test",Idx=Idx)
 
 		return self.preds_test
+
+class classifier_nn():
+	
+	def __init__(self, saveloc: str, inputdim: int, outputdim: int = 1, input_timesteps: int = 1,
+	batch_size = 32, reg_l1: float = 0.01, reg_l2: float = 0.02, period: int = 12, stateful: bool = False,
+	modelerror = 'categorical_crossentropy', optimizer = 'adam'):
+
+		self.saveloc = saveloc
+		self.inputdim = inputdim
+		self.outputdim = outputdim
+		self.input_timesteps = input_timesteps
+		self.batch_size = batch_size
+		self.l1, self.l2 = reg_l1, reg_l2
+		self.period = period
+		self.stateful = stateful
+		self.modelerror = modelerror
+		self.optimizer = optimizer
+
+		# time gaps in minutes, needed only for human readable results in output file
+		self.timegap = self.period*5
+		self.epochs = 0
+
+		# possible regularization strategies
+		self.regularizers = L1L2(self.l1, self.l2)
+
+		# create a file to log the error
+		if not self.saveloc.endswith('/'):  # attach forward slash if saveloc does not have one
+			self.saveloc += '/'
+		file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','a')
+		file.close()
+
+
+	# Create the network
+	def design_network(self, lstmhiddenlayers: list = [64, 64], densehiddenlayers: list = [], 
+	dropoutlist: list = [[],[]], batchnormalizelist : list = [[],[]]):
+
+		self.lstmhiddenlayers = lstmhiddenlayers
+		self.densehiddenlayers = densehiddenlayers
+		self.dropoutlist = dropoutlist
+		self.batchnormalizelist = batchnormalizelist
+		 
+		# There will be one dense layer with self.outputdim units
+		self.densehiddenlayers += [self.outputdim]
+
+		# Checking processors
+		if not self.dropoutlist[0]:
+			self.dropoutlist[0] = [False] * (len(self.lstmhiddenlayers))
+		else:
+			assert len(self.lstmhiddenlayers)==len(self.dropoutlist[0]), "lstmhiddenlayers and dropoutlist[0] must be of same length"
+
+		if not self.dropoutlist[1]:
+			self.dropoutlist[1] = [False] * (len(self.densehiddenlayers))
+		else:
+			assert len(self.densehiddenlayers)==len(self.dropoutlist[1]), "densehiddenlayers and dropoutlist[1] must be of same length"
+		if not self.batchnormalizelist[0]:
+			self.batchnormalizelist[0] = [False] * (len(self.lstmhiddenlayers))
+		else:
+			assert len(self.lstmhiddenlayers)==len(self.batchnormalizelist[0]), "lstmhiddenlayers and batchnormalizelist[0] must be of same length"
+
+		if not self.batchnormalizelist[1]:
+			self.batchnormalizelist[1] = [False] * (len(self.densehiddenlayers))
+		else:
+			assert len(self.densehiddenlayers)==len(self.batchnormalizelist[1]), "lstmhiddenlayers and batchnormalizelist[1] must be of same length"
+		
+		
+		# Design the network
+		if self.stateful:
+			self.input_data = Input(batch_shape=(self.batch_size, self.input_timesteps, self.inputdim))
+		else:
+			self.input_data = Input(batch_shape=(None, self.input_timesteps, self.inputdim))
+		self.input_layer = self.input_data
+		return_seqs_list = [True]*len(lstmhiddenlayers)
+
+		self.hc_list = []
+
+		# LSTM layers
+		for no_units, dropout, normalize, return_seqs in zip(lstmhiddenlayers,
+		 										dropoutlist[0],
+		  										batchnormalizelist[0],
+												return_seqs_list):
+
+			self.input_layer= LSTM(no_units, return_sequences=return_seqs,
+									 stateful = self.stateful)(self.input_layer)
+
+			if dropout:
+				self.input_layer = Dropout(0.2)(self.input_layer)
+
+			if normalize:
+				self.input_layer = BatchNormalization()(self.input_layer)
+
+		# Dense layers for regression
+
+		# relu activation for all dense layers exept last
+		activationlist = ['relu']*(len(densehiddenlayers)-1) + ['softmax']
+
+		for no_units, dropout, normalize, activation in zip(densehiddenlayers, dropoutlist[1],
+															 batchnormalizelist[1], activationlist):
+
+			self.input_layer = Dense(no_units, activation=activation)(self.input_layer)
+
+			if dropout:
+				self.input_layer = Dropout(0.2)(self.input_layer)
+
+			if normalize:
+				self.input_layer = BatchNormalization()(self.input_layer)
+
+		self.model = Model(inputs=self.input_data, outputs=self.input_layer)
+
+	def model_compile(self,):
+		# compile model
+		self.model.compile(loss=self.modelerror, optimizer=self.optimizer)
+
+
+	def show_model(self,):
+		print(self.model.summary())
+
+	def model_callbacks(self,):
+
+		self.modelchkpoint = ModelCheckpoint(self.saveloc+'LSTM_model_best',
+		 monitor = 'val_loss', save_best_only = True, period=2)
+
+		self.earlystopping = EarlyStopping(monitor = 'val_loss', patience=5, restore_best_weights=True)
+
+		self.reduclronplateau = ReduceLROnPlateau(monitor = 'val_loss', patience=2, cooldown = 3)
+
+		self.tbCallBack = TensorBoard(log_dir=self.saveloc+'loginfo', batch_size=self.batch_size, histogram_freq=0,
+		 write_graph=False, write_images=False, write_grads=True)
+
+		self.cb_list = [self.modelchkpoint, self.earlystopping, self.reduclronplateau, self.tbCallBack]
+
+		return self.cb_list
+
+	
+	def train_model(self, X_train, y_train, X_val, y_val, epochs: int = 100,
+					 saveModel: bool = False, initial_epoch = 0):
+
+		# Number of epochs to run
+		self.epochs = epochs
+
+		# train the model
+		self.history = self.model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, \
+			verbose=2, shuffle=False,initial_epoch = initial_epoch, \
+				callbacks=self.model_callbacks(), validation_data=(X_val,y_val))
+
+		if saveModel:
+			self.save_model()
+
+		return self.history
+
+
+	def save_model(self,):
+
+			self.model.save(self.saveloc+'LSTM_model_{:02d}epochs.hdf5'.format(self.epochs))
+
+	def evaluate_model(self, X_test, y_test, Idx):
+	
+		self.preds_test = self.model.predict(X_test, batch_size=self.batch_size)
+		self.preds_class = np.argmax(self.preds_test, axis=-1)
+		y_test = np.argmax(y_test, axis=-1)
+
+		results = classification_report(y_test.flatten(), self.preds_class.flatten(), output_dict=True)
+		self.pred_score = np.choose(self.preds_class.flatten(),self.preds_test.T).flatten()
+		try:
+			roc_score = roc_auc_score(y_test.flatten(), self.pred_score)
+		except ValueError:
+			roc_score = 0.5
+
+		file = open(self.saveloc + str(self.timegap)+'min Results_File.txt','a')
+		file.write('{}: Test Accuracy={} |Test Precision={} |Test ROC={}\n'.format(Idx,
+		 results['accuracy'], results['weighted avg']['precision'], roc_score))
+		file.close()
+
+		return y_test.flatten(), self.preds_class.flatten()
 
 class hybrid_LSTM_model():
 	
