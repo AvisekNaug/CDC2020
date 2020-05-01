@@ -853,7 +853,7 @@ def createlag(df, outputcols: list, lag: int = -1):
 
 def df2arrays(df, split, shuffle: bool = False, predictorcols : list = [], outputcols: list = [], \
  lag: int = -1, scaling : bool = False, feature_range = (0,1), reshaping : bool = True, input_timesteps: int = 1, \
-	 output_timesteps: int = 1, X_scale = None, y_scale = None):
+	 output_timesteps: int = 1, X_scale = None, y_scale = None, scaleX = True, scaleY=True):
 	"""
 	0 Shift output columns up by lag time points
 	1 Scales the arrays if needed based on MinMaxScaler
@@ -874,6 +874,9 @@ def df2arrays(df, split, shuffle: bool = False, predictorcols : list = [], outpu
 		reshaping {bool} -- Whether to reshape the predictors and target (default: {True})
 		input_timesteps {int} -- The number of timesteps from past to present time to consider as part of input (default: {1})
 		output_timesteps {int} -- The number of time steps into the future to predict (default: {1})
+		X_scale -- scaler for X values
+		y_scale -- scaler for y values
+		scaleX
 	"""
 
 	# 0 Shift output columns by lag time points
@@ -891,8 +894,10 @@ def df2arrays(df, split, shuffle: bool = False, predictorcols : list = [], outpu
 	X_scaler = X_scale or scaler.fit(X)
 	y_scaler = y_scale or scaler.fit(y)
 	if scaling:
-		X = X_scaler.transform(X)
-		y = y_scaler.transform(y)
+		if scaleX:
+			X = X_scaler.transform(X)
+		if scaleY:
+			y = y_scaler.transform(y)
 
 
 	if type(split) == float:

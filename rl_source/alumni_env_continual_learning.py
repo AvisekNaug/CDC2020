@@ -41,6 +41,7 @@ with warnings.catch_warnings():
 	from stable_baselines.common.vec_env import SubprocVecEnv, DummyVecEnv
 	from stable_baselines.common import set_global_seeds, make_vec_env
 	from keras.models import load_model
+	from keras.utils import to_categorical
 
 	from nn_source import models as mp
 	from rl_source import alumni_env, ppo_controller
@@ -69,6 +70,24 @@ def windowsum(df, window_size: int, column_name: str):
 def quickmerge(listdf):
     return concat(listdf)
 
+def df2operating_regions(df, column_names, thresholds):
+    """
+    Select from data frame the operating regions based on threshold
+    """
+    
+    org_shape = df.shape[0]
+    
+    # select cells to be retained
+    constraints = df.swifter.apply(
+        lambda row: all([(cell > thresholds) for cell in row[column_names]]),
+        axis=1)
+    # Drop values set to be rejected
+    df = df.drop(df.index[~constraints], axis = 0)
+    
+    print("Retaining {}% of the data".format(100*df.shape[0]/org_shape))
+    
+    return df
+
 def getdf(exp_params):
 
 	# read the data
@@ -93,72 +112,118 @@ def process_df(exp_params, df):
 	if exp_params['smoothing']['smooth']:
 		df = dp.dfsmoothing(df=df, column_names=list(df.columns), order=exp_params['smoothing']['order'],
 							Wn=exp_params['smoothing']['cutoff'], T=exp_params['smoothing']['T'])
+
 	# 0 thresholding values which may become negative due to smoothing
 	for i in utils.POS_COLUMNS:
 		df[i][df[i]<=0]=0.0001
 
 	# lag adjusting
 	if exp_params['lagging']['adjust_lag']:
-    	df = dp.createlag(df, exp_params['lagging']['lag_columns'], lag=exp_params['lagging']['data_lag'])
+		df = dp.createlag(df, exp_params['lagging']['lag_columns'], lag=exp_params['lagging']['data_lag'])
 
 	# aggregating
 	if exp_params['aggregation']['aggregate']:
 		
 		# rolling sum
-		if ['sum_aggregate']:
-			df[rolling_sum_target] =  utils.window_sum(df, window_size=period, column_names=rolling_sum_target)
+		if exp_params['aggregation']['sum_aggregate']:
+			df[exp_params['aggregation']['sum_aggregate']] =  utils.window_sum(df, 
+			window_size=exp_params['period'], column_names=exp_params['aggregation']['sum_aggregate'])
 		
 		# rolling mean
-		if ['mean_aggregate']:
-			df[rolling_mean_target] =  utils.window_mean(df, window_size=period, column_names=rolling_mean_target)
+		if exp_params['aggregation']['mean_aggregate']:
+			df[exp_params['aggregation']['mean_aggregate']] =  utils.window_mean(df,
+			 window_size=exp_params['period'], column_names=exp_params['aggregation']['mean_aggregate'])
 		
 		df = dp.dropNaNrows(df)
 		
 		# Sample the data at period intervals
-		df = dp.sample_timeseries_df(df, period=period)
-
-	# Creating a list of 7 day dataframes for training
-	# dflist = dp.df2dflist_alt(df_smoothed, subsequence=True, period=period, days=7, hours=0)
+		df = dp.sample_timeseries_df(df, period=exp_params['period'])
 
 	return df
 
-def dflist2overlap_dflist(dflist, data_weeks):
+def dflist2rl_dflist(exp_params, dflist):
 	"""Creates multiple overlapping dataframes of data_weeks length
-	with an overlap of week_overlap
+	with an overlap of week_overlap. Needed only for RL part for creating the environment
 	
 	Arguments:
 		dflist {[list]} -- input list of pandas dataframes
 		data_weeks {[int]} -- length of the dataframe in terms of number of weeks
 	"""
-	out_dflist = []  # create list of training, testing arrays
+	weeklist = []
+	num_of_elems = len(dflist)
+	start_week = exp_params['df2xy']['start_week']
+	end_week = exp_params['df2xy']['data_weeks']
 
-	datablock = dflist[:data_weeks]
-	out_dflist.append(quickmerge(datablock))  # Initial Data Block for offline training
+	while end_week<num_of_elems:
+		weeklist.append(quickmerge(dflist[start_week : end_week+1]))
 
-	for weekdata in dflist[data_weeks:]:
-	
-		datablock = datablock[1:]+[weekdata]  # remove 1st of data from initial_datablock and add new week of data
-		out_dflist.append(quickmerge(datablock))
+		start_week += 1
+		end_week += 1
 
-	return out_dflist
+	return weeklist
 
-def overlap_dflist2array(out_dflist, input_vars, outut_vars,lag,splitvalue, X_scale=None, y_scale=None):
+def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
+				inputs, outputs, input_timesteps, output_timesteps,scaleY=True):
 
-	weeklist = []  # create list of training, testing arrays
+	weeklist = []
+	num_of_elems = len(dflist)
+	start_week = exp_params['df2xy']['start_week']
+	end_week = exp_params['df2xy']['data_weeks']
 
-	for df in out_dflist:
-		X_train, X_test, y_train, y_test, _, _ = dp.df2arrays(df,
-		predictorcols=input_vars, outputcols=outut_vars, lag=lag, split=splitvalue, reshaping=True,
-		scaling=True, feature_range=(0,1), X_scale= X_scale, y_scale=y_scale)
+	# splitvalue
+	splitvalue = dflist[end_week].shape[0]
+	# year and week
+	yearno = dflist[end_week].index[int(splitvalue/2)].year
+	weekno = dflist[end_week].index[int(splitvalue/2)].week
+
+	while end_week<num_of_elems:
+
+		data_block_pre = quickmerge(dflist[start_week : end_week+1])
+		data_block = df2operating_regions(data_block_pre, threshold_on_cols, threshold)
+
+		# create numpy arrays
+		X_train, X_test, y_train, y_test, _, _ = dp.df2arrays(
+				data_block,
+				predictorcols=inputs,
+				outputcols=outputs,
+				scaling=exp_params['df2xy']['scaling'],
+				reshaping=exp_params['df2xy']['reshaping'],
+				lag=exp_params['df2xy']['create_lag'],
+				split=splitvalue,
+				input_timesteps=input_timesteps,
+				output_timesteps = output_timesteps,
+				scaleY=scaleY,
+			)
+
+		if not scaleY:  # if not scaling Y because its a binary class,
+			# do one hot encoding
+			y_train = to_categorical(y_train)
+			y_test = to_categorical(y_test)
+
+
+		# splitvalue
+		splitvalue = dflist[end_week].shape[0]
+		# year and week
+		weekno += 1
+		weekno = weekno if weekno%53 != 0 else 1
+		yearno = yearno if weekno!= 1 else yearno+1
+		
+		idx_end = -max(X_test.shape[1],y_test.shape[1])
+		idx_start = idx_end - X_test.shape[0] + 1
+		test_idx = data_block.index[[i for i in range(idx_start,idx_end+1,1)]]
 
 		weeklist.append({
-			'Id':'Year-{}-Week-{}'.format(str(df.index[0].year), 
-										str(df.index[0].week)),
+			'Id':'Year-{}-Week-{}'.format(str(yearno), 
+										str(weekno)),
 			'X_train':X_train,
 			'y_train': y_train,
 			'X_test': X_test,
-			'y_test': y_test
+			'y_test': y_test,
+			'test_idx':test_idx,
 		})
+
+		start_week += 1
+		end_week += 1
 
 	return weeklist
 	
@@ -192,6 +257,8 @@ def main(trial: int = 0, adaptive = True):
 	exp_params['pathinsert'] = 'adaptive' if adaptive else 'fixed' 
 	# period of aggregating 5 min data before starting experiments
 	exp_params['period'] = 6
+	# binary threshold below which values are considered 0
+	exp_params['threshold_energy'] = 0.5  # kBTUS in half hour
 	# track experiment seed for reproducability
 	exp_params['seed'] = seed
 	# data path
@@ -214,9 +281,9 @@ def main(trial: int = 0, adaptive = True):
 		'days':7, 'hours': 0
 	}
 	# create numpy arrays from the data
-	exp_params['df2Xy'] = {
-		'startweek' : 0, 'data_weeks' : 39, 'end_week' : -1,
-		'feature_range' : (0, 1), 'create_lag' : 0, 'scaling' : True,
+	exp_params['df2xy'] = {
+		'start_week' : 0, 'data_weeks' : 39, 'end_week' : -1,
+		'create_lag' : 0, 'scaling' : True,
 		 'reshaping' : True  # reshape data according to (batch_size, time_steps, features)
 	}
 
@@ -282,28 +349,50 @@ def main(trial: int = 0, adaptive = True):
 	# get the raw dataframe
 	df = getdf(exp_params)
 
-	# process the raw df: smooth, adjust lags, aggregate
+	# process the raw df: smooth,0 adjust, adjust lags, aggregate
 	df = process_df(exp_params, df)
+	# created because non float columns are added later
+	float_columns = df.columns
 	
-	# create scaler for all columns of entire data
+	# create data-scaler for all columns of entire the AGGREGATED data; can perform both minmax and normalize scaling
 	scaler = dp.dataframescaler(df)
 
+	# add binary classification column
+	df['valve_state'] = 1
+	df.loc[df['hwe']<= exp_params['threshold_energy'],['valve_state']] = 0
+	categorical_columns = ['valve_state']
 
+	# create a list of of weekly dataframes
+	dflist = dp.df2dflist_alt(df, subsequence=True, period=exp_params['period'], days=exp_params['df2dflist']['days'],
+	 hours=exp_params['df2dflist']['hours'])
 	
-	data_weeks=52
-	out_dflist = dflist2overlap_dflist(dflist, data_weeks=data_weeks)  # Create dflist with weekly overlaps
+	# Create dflist with weekly overlaps for rl
+	rl_dflist = dflist2rl_dflist(exp_params, dflist)
 
-	df_scaler = dp.dataframescaler(totaldf)  # create scaler for all columns of entire data
+	# Create dflist with weekly overlaps for cwe model
+	cwe_week_list = dflist2array(exp_params, dflist, scaler,
+					exp_params['cwe_model_config']['outputs'], exp_params['cwe_model_config']['threshold'],
+					exp_params['cwe_model_config']['inputs'], exp_params['cwe_model_config']['outputs'],
+					exp_params['cwe_model_config']['input_timesteps'], exp_params['cwe_model_config']['output_timesteps'],)
 
-	cwe_week_list = overlap_dflist2array(out_dflist, cwe_input_vars, cwe_output_vars, lag=-1, 
-										splitvalue=(data_weeks-1)/data_weeks, X_scale=cwe_X_scaler, y_scale=cwe_y_scaler)
+	# Create dflist with weekly overlaps for hwe model
+	hwe_week_list = dflist2array(exp_params, dflist, scaler,
+					exp_params['hwe_model_config']['outputs'], exp_params['hwe_model_config']['threshold'],
+					exp_params['hwe_model_config']['inputs'], exp_params['hwe_model_config']['outputs'],
+					exp_params['hwe_model_config']['input_timesteps'], exp_params['hwe_model_config']['output_timesteps'],)
 
-	hwe_week_list = overlap_dflist2array(out_dflist, hwe_input_vars, hwe_output_vars, lag=-1, 
-										splitvalue=(data_weeks-1)/data_weeks, X_scale=hwe_X_scaler, y_scale=hwe_y_scaler)
+	# Create dflist with weekly overlaps for hwe model
+	vlv_week_list = dflist2array(exp_params, dflist, scaler,
+					exp_params['hwe_model_config']['outputs'], exp_params['hwe_model_config']['threshold'],
+					exp_params['hwe_model_config']['inputs'], exp_params['hwe_model_config']['outputs'],
+					exp_params['hwe_model_config']['input_timesteps'], exp_params['hwe_model_config']['output_timesteps'],
+					scaleY=False)
 
-	erromsg = "Unequal lists: len(out_dflist)={0:}, len(cwe_week_list)={1:}, len(hwe_week_list)={2:}".format(
-		len(out_dflist), len(cwe_week_list), len(hwe_week_list))
-	assert all([len(out_dflist)==len(cwe_week_list), len(out_dflist)==len(hwe_week_list)]), erromsg
+
+	erromsg = "Unequal lists: len(rl_dflist)={0:}, len(cwe_week_list)={1:},\
+	 len(hwe_week_list)={2:}, len(hwe_week_list)={3:}".format(
+		len(rl_dflist), len(cwe_week_list), len(hwe_week_list), len(vlv_week_list))
+	assert all([ len(rl_dflist)==len(cwe_week_list), len(rl_dflist)==len(hwe_week_list), len(rl_dflist)==len(vlv_week_list)]), erromsg
 	#######################         End: Creating all the data requirements      ##################################
 
 
@@ -312,10 +401,10 @@ def main(trial: int = 0, adaptive = True):
 	params = {
 		'energy_saved': 1.0, 'energy_savings_thresh': 0.0, 'energy_penalty': -1.0, 'energy_reward_weight': 0.5,
 		'comfort': 1.0, 'comfort_thresh': 0.10, 'uncomfortable': -1.0, 'comfort_reward_weight': 0.5,
-		'action_minmax': [np.array([totaldf.sat.min()]), np.array([totaldf.sat.max()])]  # required for clipping
+		'action_minmax': [np.array([df.sat.min()]), np.array([df.sat.max()])]  # required for clipping
 		}
-	totaldf_stats = DataFrame(dfscaler.transform(totaldf), index=totaldf.index,
-			columns=totaldf.columns).describe().loc[['mean', 'std', 'min', 'max'],:]
+	scaled_df_stats = DataFrame(scaler.minmax_scale(df, float_columns), index=df.index,
+							columns=float_columns).describe().loc[['mean', 'std', 'min', 'max'],:]
 	env_id = alumni_env.Env  # the environment ID or the environment class
 	start_index = 0  # start rank index
 	vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
@@ -336,7 +425,7 @@ def main(trial: int = 0, adaptive = True):
 	Week = 0
 
 
-	for out_df, cwe_week, hwe_week in zip(out_dflist, cwe_week_list, hwe_week_list):
+	for out_df, cwe_week, hwe_week in zip(rl_dflist, cwe_week_list, hwe_week_list):
 		
 		"""train lstm model on cwe"""
 		# load the data arrays
@@ -406,25 +495,28 @@ def main(trial: int = 0, adaptive = True):
 
 		"""create environment with new data"""
 		# Path to a folder where the monitor files will be saved
-		monitor_dir = base_log_path+'Interval_{}/'.format(Week)
+		monitor_dir = exp_params['base_log_path']+'Interval_{}/'.format(Week)
 		
+		out_df[float_columns] = scaler.minmax_scale(out_df, float_columns)  # the file for iterating; it is scaled before being passed
 		# Arguments to be fed to the custom environment inside make_vec_env
 		env_kwargs = dict(  #  Optional keyword argument to pass to the env constructor
-
-			df=DataFrame(dfscaler.transform(out_df), index=out_df.index,
-			columns=out_df.columns),  # the file for iterating; it is scaled before being passed
-			totaldf_stats = totaldf_stats,  # stats of the environment
-			obs_space_vars=obs_space_vars,  # state space variable
-			action_space_vars=action_space_vars,  # action space variable
+			df = out_df, # the file for iterating
+			totaldf_stats = scaled_df_stats,  # stats of the environment
+			obs_space_vars=exp_params['obs_space_vars'],  # state space variable
+			action_space_vars=exp_params['action_space_vars'],  # action space variable
 			action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the params
 
-			cwe_energy_model=load_model(cwe_model_save_dir+'cwe_best_model'),  # trained lstm model
-			cwe_input_vars=cwe_input_vars,  # lstm model input variables
-			cwe_input_shape=(1, 1, len(cwe_input_vars)),  # lstm model input data shape (no_samples, output_timestep, inputdim)
+			cwe_energy_model=load_model(exp_params['cwe_model_config']['cwe_model_save_dir']+'cwe_best_model'),  # trained lstm model
+			cwe_input_vars=exp_params['cwe_model_config']['inputs'],  # lstm model input variables
+			cwe_input_shape=(1, 1, len(exp_params['cwe_model_config']['inputs'])),  # lstm model input data shape (no_samples, output_timestep, inputdim)
 
-			hwe_energy_model=load_model(hwe_model_save_dir+'hwe_best_model'),  # trained lstm model
-			hwe_input_vars=hwe_input_vars,  # lstm model input variables
-			hwe_input_shape=(1, 1, len(hwe_input_vars)),  # lstm model input data shape (no_samples, output_timestep, inputdim)
+			hwe_energy_model=load_model(exp_params['hwe_model_config']['hwe_model_save_dir']+'hwe_best_model'),  # trained lstm model
+			hwe_input_vars=exp_params['hwe_model_config']['inputs'],  # lstm model input variables
+			hwe_input_shape=(1, 1, len(exp_params['hwe_model_config']['inputs'])),  # lstm model input data shape (no_samples, output_timestep, inputdim)
+
+			vlv_energy_model=load_model(exp_params['vlv_model_config']['vlv_model_save_dir']+'vlv_best_model'),  # trained lstm model
+			vlv_input_vars=exp_params['vlv_model_config']['inputs'],  # lstm model input variables
+			vlv_input_shape=(1, 1, len(exp_params['vlv_model_config']['inputs'])),  # lstm model input data shape (no_samples, output_timestep, inputdim)
 
 			**params  # the reward adjustment parameters
 		)
