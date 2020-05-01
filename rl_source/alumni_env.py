@@ -241,21 +241,21 @@ class Env(gym.Env):
 		in_obs = s.copy()
 		# change old actions to new actions
 		in_obs.loc[:, self.action_space_vars] = a
-		
+
+		"""create inputs for cwe, hwe and vlv_state"""
+		# get input to hwe model: First do some mathematical trickery to get inputs outside obs space
+		# need additional data from df which are not part of the state/observation space
+		temp_row = self.df.iloc[[self.dataptr-1],:].copy()  # the -1 there since dataptr has davanced to nxt state
+		# update temp_row columns with in_obs data
+		temp_row.loc[:, in_obs.columns] = in_obs.to_numpy().flatten()
+
 		"""cololing energy prediction"""
 		# get input to cwe model
-		cwe_in_obs = in_obs.loc[:, self.cwe_input_vars]
+		cwe_in_obs = temp_row.loc[:, self.cwe_input_vars]  # in_obs.loc[:, self.cwe_input_vars]
 		# convert to array and reshape
 		cwe_in_obs = cwe_in_obs.to_numpy().reshape(self.cwe_input_shape)
 		# calculate cooling energy
 		cooling_energy = float(self.cwe_model.predict(cwe_in_obs, batch_size=1).flatten())
-
-		"""create inputs for both hwe and vlv_state"""
-		# get input to hwe model: First do some mathematical trickery to get inputs outside obs space
-		# need additional data from df which are not part of the state/observation space
-		temp_row = self.df.iloc[[self.dataptr-1],:].copy()
-		# update temp_row columns with in_obs data
-		temp_row.loc[:, in_obs.columns] = in_obs.to_numpy().flatten()
 
 		"""valve state prediction"""
 		# now select the inputs

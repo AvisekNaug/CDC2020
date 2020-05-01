@@ -43,13 +43,14 @@ with warnings.catch_warnings():
 	from keras.models import load_model
 
 	from nn_source import models as mp
-	from rl_source import alumnienv, controller
-	from rl_source import custom_make_env as cme
+	from rl_source import alumni_env, ppo_controller
+	from rl_source import continual_learning_make_env as cme
 
 # Would want to see the warnings
 from dataprocess import dataprocessor as dp
 from dataprocess import plotutils as pu
 from dataprocess import logutils as lu
+import alumni_env_utils as utils
 
 # create new directory if it does not exist; eles clear existing files in it
 def make_dir(dir_path):
@@ -68,36 +69,58 @@ def windowsum(df, window_size: int, column_name: str):
 def quickmerge(listdf):
     return concat(listdf)
 
-def prepare_dflist(period):
+def getdf(exp_params):
 
-	period = period  # the period to sample the data at. 1 period= 5 minutes
-
-	df1data = dp.readfile('../data/processed/buildingdata.pkl')  # read the pickled file for building data
+	# read the data
+	df1data = dp.readfile(exp_params['datapath'])  # read the pickled file for building data
 	df1 = df1data.return_df(processmethods=['file2df'])  # return pickled df
 	df2data = dp.readfile('../data/processed/interpolated/wetbulbtemp.pkl') # read the pickled file for wet bulb data
 	df2 = df2data.return_df(processmethods=['file2df'])  # return pickled df
 	df = dp.merge_df_columns([df1,df2])
 
-	df['{}min_hwe'.format(period*5)] = windowsum(df,window_size=period, column_name='hwe')  # Sum half hour energy data
-	df['{}min_cwe'.format(period*5)] = windowsum(df,window_size=period, column_name='cwe')  # Sum half hour energy data
-	df = dp.dropNaNrows(df)  # remove NaN rows created as a result
-	
-	order = 5  # order of the filter
-	T = 300  # sampling_period in seconds
-	cutoff = 0.0001  # desired cutoff frequency of the filter, Hz
-	df_smoothed = dp.dfsmoothing(df=df, column_names=list(df.columns),
-								order=order, Wn=cutoff, T=T)  # Smoothing the data
-	df_smoothed = dp.sample_timeseries_df(df_smoothed, period=period)  # Sample the data at half hour intervals
+	# create extra columns
+	df['sat-oat']= df['sat']-df['oat']
 
-	# Extract 0-1 Scaler for the entire dataframe before sending parts of it to the environment
-	scaler = MinMaxScaler(feature_range=(0,1))
-	dfscaler = scaler.fit(df_smoothed)
-	#dfscaled = DataFrame(dfscaler.fit_transform(df_smoothed), index=df.index, columns=df.columns)
+	return df
+
+def process_df(exp_params, df):
+	"""Takes the raw data frame and performs operations common to 
+	both energy modeling and reinforcement learning training
+	i.e., smoothing, 0 threshold certain values, lag adjusting, aggregating,
+	"""
+
+	# smooth the data here as it we need to conditionally remove <0 values from certain columns
+	if exp_params['smoothing']['smooth']:
+		df = dp.dfsmoothing(df=df, column_names=list(df.columns), order=exp_params['smoothing']['order'],
+							Wn=exp_params['smoothing']['cutoff'], T=exp_params['smoothing']['T'])
+	# 0 thresholding values which may become negative due to smoothing
+	for i in utils.POS_COLUMNS:
+		df[i][df[i]<=0]=0.0001
+
+	# lag adjusting
+	if exp_params['lagging']['adjust_lag']:
+    	df = dp.createlag(df, exp_params['lagging']['lag_columns'], lag=exp_params['lagging']['data_lag'])
+
+	# aggregating
+	if exp_params['aggregation']['aggregate']:
+		
+		# rolling sum
+		if ['sum_aggregate']:
+			df[rolling_sum_target] =  utils.window_sum(df, window_size=period, column_names=rolling_sum_target)
+		
+		# rolling mean
+		if ['mean_aggregate']:
+			df[rolling_mean_target] =  utils.window_mean(df, window_size=period, column_names=rolling_mean_target)
+		
+		df = dp.dropNaNrows(df)
+		
+		# Sample the data at period intervals
+		df = dp.sample_timeseries_df(df, period=period)
 
 	# Creating a list of 7 day dataframes for training
-	dflist = dp.df2dflist_alt(df_smoothed, subsequence=True, period=period, days=7, hours=0)
+	# dflist = dp.df2dflist_alt(df_smoothed, subsequence=True, period=period, days=7, hours=0)
 
-	return df, dflist, dfscaler
+	return df
 
 def dflist2overlap_dflist(dflist, data_weeks):
 	"""Creates multiple overlapping dataframes of data_weeks length
@@ -157,57 +180,120 @@ def create_energy_model(path, modelconfig, X_shape, y_shape, period, savename):
 
 	return nn_model
 
-
-
 def main(trial: int = 0, adaptive = True):
 
-	period = 6
+	exp_params = {}  # log experiment parameters
 
-	cwe_input_vars=['oat', 'orh', 'sat', 'ghi', 'flow']  # cwe lstm model input variables
-	cwe_output_vars = ['{}min_cwe'.format(period*5)]  # cwe lstm model input variables
-	hwe_input_vars=['oat','orh', 'sat', 'ghi', 'hw_sf', 'hw_st']  # hwe lstm model input variables
-	hwe_output_vars = ['{}min_hwe'.format(period*5)]  # hwe lstm model input variables
-	modelconfig = {
-	'lstm_hidden_units': 4,
-	'lstm_no_layers': 2,
-	'dense_hidden_units':8,
-	'dense_no_layers': 4,
-	'train_epochs':5,
-	'retrain_from_layers':2
-	}  # model config for creating energy model
+	# experiment number
+	exp_params['trial'] = trial
+	# whether we are testing adaptive or static control
+	exp_params['adaptive'] = adaptive
+	# Decide folder structure based on adaptive vs fixed controller
+	exp_params['pathinsert'] = 'adaptive' if adaptive else 'fixed' 
+	# period of aggregating 5 min data before starting experiments
+	exp_params['period'] = 6
+	# track experiment seed for reproducability
+	exp_params['seed'] = seed
+	# data path
+	exp_params['datapath'] = '../data/processed/buildingdata.pkl'
 
-	num_rl_steps = 2500  # steps to train the rl agent
-	n_envs = 2  # always make sure that the number of environments is even; can also be os.cpu_count()
-	obs_space_vars=['oat', 'orh', 'ghi', 'sat', 'avg_stpt', 'flow']  # rl state space
-	action_space_vars=['sat']  # rl action space
+	# aggregate the data if needed
+	exp_params['aggregation'] = {
+		'aggregate': True, 'mean_aggregate' : utils.MEAN_AGG, 'sum_aggregate': utils.SUM_AGG,
+	}
+	# smooth the data if needed
+	exp_params['smoothing'] = {
+		'smooth': True, 'order' : 5, 'T' : 300, 'fs' : 1 / 300, 'cutoff' : 0.0001,
+	}
+	# lag certain columns if needed
+	exp_params['lagging'] = {  # negative means shift column upwards
+		'adjust_lag' : False, 'lag_columns' : utils.LAG_COLUMNS, 'data_lag' : -1,
+	}
+	# create temporal batches of data
+	exp_params['df2dflist'] = {
+		'days':7, 'hours': 0
+	}
+	# create numpy arrays from the data
+	exp_params['df2Xy'] = {
+		'startweek' : 0, 'data_weeks' : 39, 'end_week' : -1,
+		'feature_range' : (0, 1), 'create_lag' : 0, 'scaling' : True,
+		 'reshaping' : True  # reshape data according to (batch_size, time_steps, features)
+	}
 
-	pathinsert = 'adaptive' if adaptive else 'fixed'  # Decide folder structure based on adaptive vs fixed controller
+	# cwe model configuration
+	exp_params['cwe_model_config'] = {
+		'inputs': ['flow', 'orh', 'wbt',  'sat-oat'], 'outputs' : ['cwe'], 'threshold': 0.5,
+		'input_timesteps' : 1,  'output_timesteps' : 1,
+		'lstm_hidden_units': 8, 'lstm_no_layers': 2, 'dense_hidden_units': 16, 'dense_no_layers': 4,
+		'retrain_from_layers': 3, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
+		'modeldesigndone' : False, 'initial_epoch' : 0, 'retain_prev_model' : True,
+		'freeze_model' : True, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
+		'cwe_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/cwe/'.format(exp_params['trials']),
+	}
+	make_dir(exp_params['cwe_model_config']['cwe_model_save_dir'])  # create the folder if it does not exist
 
-	rlmodel_save_dir='../models/'+pathinsert+'/Trial_{}/rl/'.format(trial)  # save the model and rl agents here
-	make_dir(rlmodel_save_dir)  # create the folder if it does not exist
+	# hwe model configuration
+	exp_params['hwe_model_config'] = {
+		'inputs': ['oat', 'orh', 'wbt', 'sat-oat'], 'outputs' : ['hwe'], 'threshold': 0.5,
+		'input_timesteps' : 1,  'output_timesteps' : 1, 
+		'lstm_hidden_units': 4, 'lstm_no_layers': 0, 'dense_hidden_units': 16, 'dense_no_layers': 6,
+		'retrain_from_layers': 3, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
+		'modeldesigndone' : False, 'initial_epoch' : 0, 'retain_prev_model' : True,
+		'freeze_model' : True, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
+		'hwe_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/hwe/'.format(exp_params['trials']),
+	}
+	make_dir(exp_params['hwe_model_config']['hwe_model_save_dir'])  # create the folder if it does not exist
 
-	log_dir = rlmodel_save_dir + '/performance/'  # save the rl performance output here
-	make_dir(log_dir)  # create the folder if it does not exist
+	# heating valve model configuration
+	exp_params['vlv_model_config'] = {
+		'inputs': ['oat', 'orh', 'wbt', 'sat-oat'], 'outputs' : ['valve_state'], 'threshold': 0.5,
+		'input_timesteps' : 1,  'output_timesteps' : 1, 
+		'lstm_hidden_units': 8, 'lstm_no_layers': 2, 'dense_hidden_units': 16, 'dense_no_layers': 4,
+		'retrain_from_layers': 3, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
+		'modeldesigndone' : False, 'initial_epoch' : 0, 'retain_prev_model' : True,
+		'freeze_model' : True, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
+		'vlv_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/vlv/'.format(exp_params['trials']),
+	}
+	make_dir(exp_params['vlv_model_config']['vlv_model_save_dir'])  # create the folder if it does not exist
 
-	base_log_path = '../log/'+pathinsert+'/Trial_{}/'.format(trial)  # path to save environment monitor logs
+	# steps to train the rl agent
+	exp_params['num_rl_steps'] = 2500
+	# always make sure that the number of environments is even; can also be os.cpu_count()
+	exp_params['n_envs'] = 2
+	# rl state space
+	exp_params['obs_space_vars']=['oat', 'orh', 'wbt', 'avg_stpt', 'sat',]
+	# rl action space
+	exp_params['action_space_vars']=['sat']
 
-	cwe_model_save_dir = '../models/'+pathinsert+'/Trial_{}/cwe/'.format(trial)  # save cwe model and its output here
-	make_dir(cwe_model_save_dir)  # create the folder if it does not exist
+	# save the model and rl agents here
+	exp_params['rlmodel_save_dir'] ='../models/'+exp_params['pathinsert']+'/Trial_{}/rl/'.format(exp_params['trials'])
+	make_dir(exp_params['rlmodel_save_dir'])  # create the folder if it does not exist
 
-	hwe_model_save_dir = '../models/'+pathinsert+'/Trial_{}/hwe/'.format(trial)  # save hwe model and its output here
-	make_dir(hwe_model_save_dir)  # create the folder if it does not exist
+	# save the rl performance output here
+	exp_params['log_dir'] = exp_params['rlmodel_save_dir'] + '/performance/'
+	make_dir(exp_params['log_dir'])  # create the folder if it does not exist
+
+	# path to save environment monitor logs
+	exp_params['base_log_path'] = '../log/'+exp_params['pathinsert']+'/Trial_{}/'.format(exp_params['trials'])
 
 	
 	#######################         Begin : Creating all the data requirements     ##################################
-	totaldf, dflist, dfscaler = prepare_dflist(period)  # entire df, break df to weekly dflist, scaler for entire data
+
+	# get the raw dataframe
+	df = getdf(exp_params)
+
+	# process the raw df: smooth, adjust lags, aggregate
+	df = process_df(exp_params, df)
+	
+	# create scaler for all columns of entire data
+	scaler = dp.dataframescaler(df)
+
+
+	
 	data_weeks=52
 	out_dflist = dflist2overlap_dflist(dflist, data_weeks=data_weeks)  # Create dflist with weekly overlaps
 
-	_, _, _, _, cwe_X_scaler, cwe_y_scaler = dp.df2arrays(totaldf, predictorcols=cwe_input_vars, 
-	outputcols=cwe_output_vars, feature_range=(0,1), reshaping=False)  # extract cwe scaler for entire data
-
-	_, _, _, _, hwe_X_scaler, hwe_y_scaler = dp.df2arrays(totaldf, predictorcols=hwe_input_vars,
-	outputcols=hwe_output_vars, feature_range=(0,1), reshaping=False)  # extract hwe scaler for entire data
+	df_scaler = dp.dataframescaler(totaldf)  # create scaler for all columns of entire data
 
 	cwe_week_list = overlap_dflist2array(out_dflist, cwe_input_vars, cwe_output_vars, lag=-1, 
 										splitvalue=(data_weeks-1)/data_weeks, X_scale=cwe_X_scaler, y_scale=cwe_y_scaler)
@@ -230,7 +316,7 @@ def main(trial: int = 0, adaptive = True):
 		}
 	totaldf_stats = DataFrame(dfscaler.transform(totaldf), index=totaldf.index,
 			columns=totaldf.columns).describe().loc[['mean', 'std', 'min', 'max'],:]
-	env_id = alumnienv.Env  # the environment ID or the environment class
+	env_id = alumni_env.Env  # the environment ID or the environment class
 	start_index = 0  # start rank index
 	vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
 	#######################         End : Prerequisites for the environment     ##################################
@@ -359,7 +445,7 @@ def main(trial: int = 0, adaptive = True):
 		# create agent with new data or reuse old agent if in the loop for the first time
 		if not agent_created:
 			# create new agent with the environment model
-			agent = controller.get_agent(env=envmodel, model_save_dir=rlmodel_save_dir, monitor_log_dir=base_log_path)
+			agent = ppo_controller.get_agent(env=envmodel, model_save_dir=rlmodel_save_dir, monitor_log_dir=base_log_path)
 			
 
 
@@ -371,7 +457,7 @@ def main(trial: int = 0, adaptive = True):
 		if (not agent_created) | adaptive :
 			# train the agent
 			print("Training Started... \n")
-			agent = controller.train_agent(agent, env = envmodel, steps=num_rl_steps,
+			agent = ppo_controller.train_agent(agent, env = envmodel, steps=num_rl_steps,
 			tb_log_name= base_log_path+'ppo2_event_folder')
 		else:
 			print('Retraining aborted. Fixed controller will be used... \n')
@@ -384,7 +470,7 @@ def main(trial: int = 0, adaptive = True):
 
 		# provide path to the current best rl agent weights and test it
 		best_model_path = rlmodel_save_dir + 'best_model.pkl'
-		test_perf_log = controller.test_agent(best_model_path, envmodel, num_episodes=1)
+		test_perf_log = ppo_controller.test_agent(best_model_path, envmodel, num_episodes=1)
 
 		# save the agent performance on test data
 		lu.rl_perf_save(test_perf_log, log_dir, save_as='csv', header=writeheader)
