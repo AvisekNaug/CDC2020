@@ -182,18 +182,11 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 		data_block = df2operating_regions(data_block_pre, threshold_on_cols, threshold)
 
 		# create numpy arrays
-		X_train, X_test, y_train, y_test, _, _ = dp.df2arrays(
-				data_block,
-				predictorcols=inputs,
-				outputcols=outputs,
-				scaling=exp_params['df2xy']['scaling'],
-				reshaping=exp_params['df2xy']['reshaping'],
-				lag=exp_params['df2xy']['create_lag'],
-				split=splitvalue,
-				input_timesteps=input_timesteps,
-				output_timesteps = output_timesteps,
-				scaleY=scaleY,
-			)
+		X_train, X_test, y_train, y_test = dp.df_2_arrays(df = data_block,
+		 predictorcols = inputs, outputcols = outputs, lag=exp_params['df2xy']['create_lag'],
+		 scaling=exp_params['df2xy']['scaling'], scaler = scaler, scaleX = True, scaleY = scaleY,
+		 split=splitvalue, shuffle=False,
+		 reshaping=exp_params['df2xy']['reshaping'], input_timesteps=input_timesteps, output_timesteps = output_timesteps,)
 
 		if not scaleY:  # if not scaling Y because its a binary class,
 			# do one hot encoding
@@ -432,8 +425,17 @@ def main(trial: int = 0, adaptive = True):
 		X_train, y_train, X_test, y_test = cwe_week['X_train'], cwe_week['y_train'], cwe_week['X_test'], cwe_week['y_test']
 
 		if not cwe_created:  # create model for the first time
-			cwe_model = create_energy_model(cwe_model_save_dir, modelconfig, X_train.shape,
-			 y_train.shape, period, 'cwe_best_model')
+			#Instantiate learner model
+   			nn_model = mp.regression_nn(exp_params['cwe_model_config']['cwe_model_save_dir'],
+										inputdim = X_train.shape[-1],
+										outputdim = y_train.shape[-1],
+										input_timesteps = input_timesteps,
+										output_timesteps = output_timesteps,
+										period = exp_params['period'],
+										stateful = exp_params['cwe_model_config']['train_stateful'],
+										batch_size=exp_params['cwe_model_config']['train_batchsize'])
+			# design the network
+			
 		else:  # else load saved model and freeze layers and reinitialize head layers
 			cwe_model.model.load_weights(cwe_model_save_dir+'cwe_best_model') # load best model weights in to cwe_model class
 			if freeze_model:
@@ -523,7 +525,8 @@ def main(trial: int = 0, adaptive = True):
 
 		if not env_created:
 			# make the environment
-			envmodel =  cme.custom_make_vec_env(env_id = env_id, n_envs = n_envs, seed = seed, start_index = start_index,
+			envmodel =  cme.custom_make_vec_env(env_id = env_id, n_envs = exp_params['n_envs'],
+							 seed = exp_params['seed'], start_index = start_index,
 							monitor_dir = monitor_dir, vec_env_cls = vec_env_cls, env_kwargs = env_kwargs)
 			env_created = True
 		else:
@@ -537,7 +540,8 @@ def main(trial: int = 0, adaptive = True):
 		# create agent with new data or reuse old agent if in the loop for the first time
 		if not agent_created:
 			# create new agent with the environment model
-			agent = ppo_controller.get_agent(env=envmodel, model_save_dir=rlmodel_save_dir, monitor_log_dir=base_log_path)
+			agent = ppo_controller.get_agent(env=envmodel, model_save_dir=exp_params['rlmodel_save_dir'],
+			 monitor_log_dir=exp_params['base_log_path'])
 			
 
 
@@ -549,8 +553,8 @@ def main(trial: int = 0, adaptive = True):
 		if (not agent_created) | adaptive :
 			# train the agent
 			print("Training Started... \n")
-			agent = ppo_controller.train_agent(agent, env = envmodel, steps=num_rl_steps,
-			tb_log_name= base_log_path+'ppo2_event_folder')
+			agent = ppo_controller.train_agent(agent, env = envmodel, steps=exp_params['num_rl_steps'],
+			tb_log_name= exp_params['base_log_path']+'ppo2_event_folder')
 		else:
 			print('Retraining aborted. Fixed controller will be used... \n')
 
@@ -561,11 +565,11 @@ def main(trial: int = 0, adaptive = True):
 		envmodel.env_method('testenv')
 
 		# provide path to the current best rl agent weights and test it
-		best_model_path = rlmodel_save_dir + 'best_model.pkl'
+		best_model_path = exp_params['rlmodel_save_dir'] + 'best_model.pkl'
 		test_perf_log = ppo_controller.test_agent(best_model_path, envmodel, num_episodes=1)
 
 		# save the agent performance on test data
-		lu.rl_perf_save(test_perf_log, log_dir, save_as='csv', header=writeheader)
+		lu.rl_perf_save(test_perf_log, exp_params['log_dir'], save_as='csv', header=writeheader)
 
 		Week += 1  # shift to the next week
 		agent_created = True  # flip the agent_created flag
@@ -574,7 +578,8 @@ def main(trial: int = 0, adaptive = True):
 		writeheader = False # flip the flag
 	
 	# plot the results
-	pu.reward_agg_plot([0], 0, Week, '../log/'+pathinsert+'/', '../models/'+pathinsert+'/Trial_{}/'.format(trial), 0)
+	pu.reward_agg_plot([0], 0, Week, '../log/'+exp_params['pathinsert']+'/',
+	 '../models/'+exp_params['pathinsert']+'/Trial_{}/'.format(trial), 0)
 
 # wrap the environment in the vectorzied wrapper with SubprocVecEnv
 # run the environment inside if __name__ == '__main__':

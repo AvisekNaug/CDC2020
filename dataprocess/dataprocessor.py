@@ -996,3 +996,64 @@ class dataframescaler():
 			return input_data[input_columns]*std + mean
 		else:
 			return input_data*std.to_numpy() + mean.to_numpy()
+
+def df_2_arrays( df,
+				 predictorcols : list, 
+				 outputcols: list, 
+				 lag: int,
+				 
+				 scaling : bool,
+				 scaler,
+				 scaleX : bool = True, 
+				 scaleY : bool = True,
+
+				 split = 0,
+				 shuffle: bool = False, 
+ 
+				 reshaping : bool = True, 
+				 input_timesteps: int = 1, 
+				 output_timesteps: int = 1, 
+				 ):
+	"""
+	0 Shift output columns up by lag time points
+	1 Scales the arrays if needed based on MinMaxScaler
+	2 Shuffle the dataframe rows if needed and divide the dataframe into train and test set numpy arrays
+	 taking care of the predictor and target variables
+	3 Rehapes the arrays if needed based on the requirements for the input to be a time sequence and output to be a time sequence
+	"""
+
+	# 0 Shift output columns by lag time points
+	df2 = createlag(df, outputcols = outputcols, lag = lag)
+
+	# df to array
+	X = df.loc[df2.index,:][predictorcols].to_numpy()
+	y = df2[outputcols].to_numpy()
+
+	# 1 Scales the arrays if needed
+	if scaling:
+		if scaleX:
+			X = scaler.minmax_scale(X, predictorcols)
+		if scaleY:
+			y = scaler.minmax_scale(y, outputcols)
+
+
+	if type(split) == float:
+		# 2 Shuffle the dataframe rows if needed before and divide the dataframe into train and test sets
+		X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1-split, shuffle=shuffle)
+	else:
+		# 2 Shuffle the dataframe rows if needed before and divide the dataframe into train and test sets
+		X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=split, shuffle=shuffle) 
+	"""
+	X_train.shape =(samplesize, len(predictorcols))
+	y_train.shape =(samplesize, len(outputcols))
+	"""
+
+	# 3 Rehapes the arrays if needed based on the requirements for the input to be a time sequence and \
+	# output to be a time sequence
+	if reshaping:  # NB: sample size will change due to reshaping and subsequent removal of NaN rows
+		X_train = inputreshaper(X_train, input_timesteps, output_timesteps)  # (eg samplesize, 1, 4 or 5)
+		y_train = outputreshaper(y_train, output_timesteps, len(outputcols), input_timesteps)  # (eg samplesize, 1, 1)
+		X_test = inputreshaper(X_test, input_timesteps, output_timesteps)  # (eg samplesize, 1, 4 or 5)
+		y_test = outputreshaper(y_test, output_timesteps, len(outputcols), input_timesteps)  # (eg samplesize, 1, 1)
+
+	return [X_train, X_test, y_train, y_test]
