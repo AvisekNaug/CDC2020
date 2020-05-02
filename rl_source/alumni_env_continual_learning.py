@@ -3,6 +3,7 @@ seed = 123  # the initial seed for the random number generator
 # 1. Set the `PYTHONHASHSEED` environment variable at a fixed value
 import os
 os.environ['PYTHONHASHSEED']=str(seed)
+import shutil
 # 2. Set the `python` built-in pseudo-random generator at a fixed value
 import random
 random.seed(seed)
@@ -62,6 +63,17 @@ def make_dir(dir_path):
 		files = os.listdir(dir_path)
 		for f in files:
 			os.remove(dir_path + f)
+
+def make_dir2(dir_path):
+	try:
+		os.makedirs(dir_path)
+	except FileExistsError:
+		files = os.listdir(dir_path)
+		for f in files:
+			try:
+				shutil.rmtree(dir_path + f)
+			except NotADirectoryError:
+				os.remove(dir_path + f)
 
 # return a new column which is the sum of previous window_size values
 def windowsum(df, window_size: int, column_name: str):
@@ -154,7 +166,7 @@ def dflist2rl_dflist(exp_params, dflist):
 	start_week = exp_params['df2xy']['start_week']
 	end_week = exp_params['df2xy']['data_weeks']
 
-	while end_week<num_of_elems:
+	while end_week<exp_params['df2xy']['end_week']:
 		weeklist.append(quickmerge(dflist[start_week : end_week+1]))
 
 		start_week += 1
@@ -176,7 +188,7 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 	yearno = dflist[end_week].index[int(splitvalue/2)].year
 	weekno = dflist[end_week].index[int(splitvalue/2)].week
 
-	while end_week<num_of_elems:
+	while end_week<exp_params['df2xy']['end_week']:
 
 		data_block_pre = quickmerge(dflist[start_week : end_week+1])
 		data_block = df2operating_regions(data_block_pre, threshold_on_cols, threshold)
@@ -219,24 +231,6 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 		end_week += 1
 
 	return weeklist
-	
-def create_energy_model(path, modelconfig, X_shape, y_shape, period, savename):
-
-	#Instantiate learner model
-	nn_model = mp.lstm_model_transferlearning(path, inputdim=X_shape[-1], outputdim=y_shape[-1], period=period)
-
-	# Design model architecture
-	nn_model.design_network(lstmhiddenlayers=[modelconfig['lstm_hidden_units']] * modelconfig['lstm_no_layers'],
-						densehiddenlayers=[modelconfig['dense_hidden_units']] * modelconfig['dense_no_layers'],
-						dropoutlist=[[], []], batchnormalizelist=[[], []])
-
-	# compile model
-	nn_model.model_compile()
-
-	# creating early stopping and learning reate changing callbacks
-	nn_model.model_callbacks(savename = savename)
-
-	return nn_model
 
 def main(trial: int = 0, adaptive = True):
 
@@ -275,7 +269,7 @@ def main(trial: int = 0, adaptive = True):
 	}
 	# create numpy arrays from the data
 	exp_params['df2xy'] = {
-		'start_week' : 0, 'data_weeks' : 39, 'end_week' : -1,
+		'start_week' : 0, 'data_weeks' : 39, 'end_week' : 40,
 		'create_lag' : 0, 'scaling' : True,
 		 'reshaping' : True  # reshape data according to (batch_size, time_steps, features)
 	}
@@ -288,9 +282,12 @@ def main(trial: int = 0, adaptive = True):
 		'retrain_from_layers': 3, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
 		'modeldesigndone' : False, 'initial_epoch' : 0, 'retain_prev_model' : True,
 		'freeze_model' : True, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
-		'cwe_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/cwe/'.format(exp_params['trials']),
+		'cwe_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/cwe/'.format(exp_params['trial']),
 	}
-	make_dir(exp_params['cwe_model_config']['cwe_model_save_dir'])  # create the folder if it does not exist
+	make_dir2(exp_params['cwe_model_config']['cwe_model_save_dir'])  # create the folder if it does not exist
+	os.mkdir(exp_params['cwe_model_config']['cwe_model_save_dir'] + 'loginfo')
+	os.mkdir(exp_params['cwe_model_config']['cwe_model_save_dir'] + 'normalplots')
+	os.mkdir(exp_params['cwe_model_config']['cwe_model_save_dir'] + 'detailedplots')
 
 	# hwe model configuration
 	exp_params['hwe_model_config'] = {
@@ -300,9 +297,13 @@ def main(trial: int = 0, adaptive = True):
 		'retrain_from_layers': 3, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
 		'modeldesigndone' : False, 'initial_epoch' : 0, 'retain_prev_model' : True,
 		'freeze_model' : True, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
-		'hwe_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/hwe/'.format(exp_params['trials']),
+		'hwe_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/hwe/'.format(exp_params['trial']),
 	}
-	make_dir(exp_params['hwe_model_config']['hwe_model_save_dir'])  # create the folder if it does not exist
+	make_dir2(exp_params['hwe_model_config']['hwe_model_save_dir'])  # create the folder if it does not exist
+	os.mkdir(exp_params['hwe_model_config']['hwe_model_save_dir'] + 'loginfo')
+	os.mkdir(exp_params['hwe_model_config']['hwe_model_save_dir'] + 'normalplots')
+	os.mkdir(exp_params['hwe_model_config']['hwe_model_save_dir'] + 'detailedplots')
+	
 
 	# heating valve model configuration
 	exp_params['vlv_model_config'] = {
@@ -312,9 +313,11 @@ def main(trial: int = 0, adaptive = True):
 		'retrain_from_layers': 3, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
 		'modeldesigndone' : False, 'initial_epoch' : 0, 'retain_prev_model' : True,
 		'freeze_model' : True, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
-		'vlv_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/vlv/'.format(exp_params['trials']),
+		'vlv_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/vlv/'.format(exp_params['trial']),
 	}
-	make_dir(exp_params['vlv_model_config']['vlv_model_save_dir'])  # create the folder if it does not exist
+	make_dir2(exp_params['vlv_model_config']['vlv_model_save_dir'])  # create the folder if it does not exist
+	os.mkdir(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'loginfo')
+	os.mkdir(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'detailedplots')
 
 	# steps to train the rl agent
 	exp_params['num_rl_steps'] = 2500
@@ -326,15 +329,15 @@ def main(trial: int = 0, adaptive = True):
 	exp_params['action_space_vars']=['sat']
 
 	# save the model and rl agents here
-	exp_params['rlmodel_save_dir'] ='../models/'+exp_params['pathinsert']+'/Trial_{}/rl/'.format(exp_params['trials'])
-	make_dir(exp_params['rlmodel_save_dir'])  # create the folder if it does not exist
+	exp_params['rlmodel_save_dir'] ='../models/'+exp_params['pathinsert']+'/Trial_{}/rl/'.format(exp_params['trial'])
+	make_dir2(exp_params['rlmodel_save_dir'])  # create the folder if it does not exist
 
 	# save the rl performance output here
 	exp_params['log_dir'] = exp_params['rlmodel_save_dir'] + '/performance/'
-	make_dir(exp_params['log_dir'])  # create the folder if it does not exist
+	make_dir2(exp_params['log_dir'])  # create the folder if it does not exist
 
 	# path to save environment monitor logs
-	exp_params['base_log_path'] = '../log/'+exp_params['pathinsert']+'/Trial_{}/'.format(exp_params['trials'])
+	exp_params['base_log_path'] = '../log/'+exp_params['pathinsert']+'/Trial_{}/'.format(exp_params['trial'])
 
 	
 	#######################         Begin : Creating all the data requirements     ##################################
@@ -378,8 +381,7 @@ def main(trial: int = 0, adaptive = True):
 	vlv_week_list = dflist2array(exp_params, dflist, scaler,
 					exp_params['hwe_model_config']['outputs'], exp_params['hwe_model_config']['threshold'],
 					exp_params['hwe_model_config']['inputs'], exp_params['hwe_model_config']['outputs'],
-					exp_params['hwe_model_config']['input_timesteps'], exp_params['hwe_model_config']['output_timesteps'],
-					scaleY=False)
+					exp_params['hwe_model_config']['input_timesteps'], exp_params['hwe_model_config']['output_timesteps'], scaleY=False)
 
 
 	erromsg = "Unequal lists: len(rl_dflist)={0:}, len(cwe_week_list)={1:},\
@@ -410,7 +412,7 @@ def main(trial: int = 0, adaptive = True):
 	agent_created = False
 	hwe_created = False
 	cwe_created = False
-	initial_epoch_cwe, initial_epoch_hwe = 0, 0
+	initial_epoch_cwe, initial_epoch_hwe, initial_epoch_vlv = 0, 0, 0
 	freeze_model = True
 	reinitialize = True
 	writeheader = True
@@ -418,39 +420,45 @@ def main(trial: int = 0, adaptive = True):
 	Week = 0
 
 
-	for out_df, cwe_week, hwe_week in zip(rl_dflist, cwe_week_list, hwe_week_list):
+	for out_df, cwe_week, hwe_week in zip(rl_dflist, cwe_week_list[:2], hwe_week_list):
 		
 		"""train lstm model on cwe"""
 		# load the data arrays
 		X_train, y_train, X_test, y_test = cwe_week['X_train'], cwe_week['y_train'], cwe_week['X_test'], cwe_week['y_test']
 
-		if not cwe_created:  # create model for the first time
+		# create model for the first time
+		if not cwe_created:
 			#Instantiate learner model
-   			nn_model = mp.regression_nn(exp_params['cwe_model_config']['cwe_model_save_dir'],
+			cwe_model = mp.regression_nn(exp_params['cwe_model_config']['cwe_model_save_dir'],
 										inputdim = X_train.shape[-1],
 										outputdim = y_train.shape[-1],
-										input_timesteps = input_timesteps,
-										output_timesteps = output_timesteps,
+										input_timesteps = exp_params['cwe_model_config']['input_timesteps'],
+										output_timesteps = exp_params['cwe_model_config']['output_timesteps'],
 										period = exp_params['period'],
 										stateful = exp_params['cwe_model_config']['train_stateful'],
 										batch_size=exp_params['cwe_model_config']['train_batchsize'])
 			# design the network
-			
-		else:  # else load saved model and freeze layers and reinitialize head layers
-			cwe_model.model.load_weights(cwe_model_save_dir+'cwe_best_model') # load best model weights in to cwe_model class
+			cwe_model.design_network(
+				lstmhiddenlayers=[exp_params['cwe_model_config']['lstm_hidden_units']] * exp_params['cwe_model_config']['lstm_no_layers'],
+				densehiddenlayers=[exp_params['cwe_model_config']['dense_hidden_units']] * exp_params['cwe_model_config']['dense_no_layers'],
+				dropoutlist=[[], []], batchnormalizelist=[[], []])
+		# else load saved model and freeze layers and reinitialize head layers
+		else:  
+			cwe_model.model.load_weights(exp_params['cwe_model_config']['cwe_model_save_dir']+
+											'LSTM_model_best')  # load best model weights in to cwe_model class
 			if freeze_model:
-				for layer in cwe_model.model.layers[:-modelconfig['retrain_from_layers']]:  # freeze layers
+				for layer in cwe_model.model.layers[:exp_params['cwe_model_config']['retrain_from_layers']]:
 					layer.trainable = False
 			if reinitialize:  
-				for layer in cwe_model.model.layers[-modelconfig['retrain_from_layers']:]:
-						layer.kernel.initializer.run(session=K.get_session())
-						layer.bias.initializer.run(session=K.get_session())
-			# recompile model
-			cwe_model.model_compile()
+				for layer in cwe_model.model.layers[exp_params['cwe_model_config']['retrain_from_layers']:]:
+					layer.kernel.initializer.run(session=K.get_session())
+					layer.bias.initializer.run(session=K.get_session())
+		# recompile model
+		cwe_model.model_compile()
 
 
 		# train the model
-		cwe_history = cwe_model.train_model(X_train, y_train, X_test, y_test, epochs=modelconfig['train_epochs'],
+		cwe_history = cwe_model.train_model(X_train, y_train, X_test, y_test, epochs=exp_params['cwe_model_config']['train_epochs'],
 									initial_epoch = initial_epoch_cwe)
 		try:
 			initial_epoch_cwe += len(cwe_history.history['loss'])
@@ -458,8 +466,20 @@ def main(trial: int = 0, adaptive = True):
 			pass
 
 		# evaluate the model for metrics at this stage
-		_, _ = cwe_model.evaluate_model(X_train, y_train, X_test, y_test, cwe_y_scaler, scaling=True,
-											saveplot=True,Idx=cwe_week['Id'],outputdim_names=['Cooling Energy'])
+		preds_test = cwe_model.evaluate_model( X_test, y_test, 
+											scaler, save_plot_loc=exp_params['cwe_model_config']['cwe_model_save_dir']+'normalplots/',
+											scaling=True, saveplot=False,
+											Idx=cwe_week['Id'],
+											outputdim_names=[utils.addl['names_abreviation'][exp_params['cwe_model_config']['outputs'][0]]],
+											output_mean = [scaled_df_stats.loc['mean', exp_params['cwe_model_config']['outputs'][0]]])
+		# log the outputs first in a text file
+		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['cwe_model_config']['inputs']), 
+									 scaler.minmax_inverse_scale(y_test[:,-1,:], exp_params['cwe_model_config']['outputs']),
+									 scaler.minmax_inverse_scale(preds_test[:,-1,:], exp_params['cwe_model_config']['outputs'])),
+									 axis=-1)
+		merged_log_df = DataFrame(data = merged_log, index = cwe_week['test_idx'], 
+			columns = exp_params['cwe_model_config']['inputs'] + [i+exp_params['cwe_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
+		merged_log_df.to_csv(exp_params['cwe_model_config']['cwe_model_save_dir']+cwe_week['Id']+'.csv')
 
 
 		"""train lstm model on hwe"""
