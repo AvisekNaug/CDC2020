@@ -489,7 +489,7 @@ def main(trial: int = 0, adaptive = True):
 		merged_log_df = DataFrame(data = merged_log, index = cwe_week['test_idx'], 
 								columns = exp_params['cwe_model_config']['inputs'] + 
 								[i+exp_params['cwe_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
-		merged_log_df.to_csv(exp_params['cwe_model_config']['cwe_model_save_dir']+cwe_week['Id']+'.csv')
+		merged_log_df.to_csv(exp_params['cwe_model_config']['cwe_model_save_dir'] + 'detailedplot/' + cwe_week['Id']+'.csv')
 
 
 		"""train hwe_model"""
@@ -550,7 +550,7 @@ def main(trial: int = 0, adaptive = True):
 		merged_log_df = DataFrame(data = merged_log, index = hwe_week['test_idx'], 
 									columns = exp_params['hwe_model_config']['inputs'] +
 			 						[i+exp_params['hwe_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
-		merged_log_df.to_csv(exp_params['hwe_model_config']['hwe_model_save_dir']+hwe_week['Id']+'.csv')
+		merged_log_df.to_csv(exp_params['hwe_model_config']['hwe_model_save_dir'] + 'detailedplot/' +hwe_week['Id']+'.csv')
 
 		"""train vlv_state_model"""
 		# load the data arrays
@@ -602,7 +602,7 @@ def main(trial: int = 0, adaptive = True):
 		merged_log_df = DataFrame(data = merged_log, index = vlv_week['test_idx'], 
 									columns = exp_params['vlv_model_config']['inputs'] +
 			 						[i+exp_params['vlv_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
-		merged_log_df.to_csv(exp_params['vlv_model_config']['vlv_model_save_dir']+vlv_week['Id']+'.csv')
+		merged_log_df.to_csv(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'detailedplot/' +vlv_week['Id']+'.csv')
 
 		
 
