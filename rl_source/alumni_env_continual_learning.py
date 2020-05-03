@@ -54,6 +54,8 @@ from dataprocess import plotutils as pu
 from dataprocess import logutils as lu
 import alumni_env_utils as utils
 
+import json
+
 # create new directory if it does not exist; eles clear existing files in it
 def make_dir(dir_path):
 	# clear old files
@@ -395,11 +397,12 @@ def main(trial: int = 0, adaptive = True):
 
 	#######################         Begin : Prerequisites for the environment     ##################################
 	# important parameters to scale the reward
-	params = {
+	reward_params = {
 		'energy_saved': 2.0, 'energy_savings_thresh': 0.0, 'energy_penalty': -1.0, 'energy_reward_weight': 0.5,
 		'comfort': 2.0, 'comfort_thresh': 0.10, 'uncomfortable': -1.0, 'comfort_reward_weight': 0.5,
 		'action_minmax': [np.array([df.sat.min()]), np.array([df.sat.max()])]  # required for clipping
 		}
+	exp_params['reward_params'] = reward_params
 	scaled_df_stats = DataFrame(scaler.minmax_scale(df, float_columns), index=df.index,
 							columns=float_columns).describe().loc[['mean', 'std', 'min', 'max'],:]
 	env_id = alumni_env.Env  # the environment ID or the environment class
@@ -407,6 +410,9 @@ def main(trial: int = 0, adaptive = True):
 	vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
 	#######################         End : Prerequisites for the environment     ##################################
 
+	# save the metadata
+	with open('../models/'+exp_params['pathinsert']+'/Trial_{}/'.format(exp_params['trial'])+'experiemnt_params.json', 'w') as fp:
+		json.dump(exp_params, fp, indent=4)
 
 	# main iteration loop
 
@@ -611,7 +617,7 @@ def main(trial: int = 0, adaptive = True):
 			totaldf_stats = scaled_df_stats,  # stats of the environment
 			obs_space_vars=exp_params['obs_space_vars'],  # state space variable
 			action_space_vars=exp_params['action_space_vars'],  # action space variable
-			action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the params
+			action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the reward_params
 
 			cwe_energy_model=load_model(exp_params['cwe_model_config']['cwe_model_save_dir']+'LSTM_model_best'),  # trained lstm model
 			cwe_input_vars=exp_params['cwe_model_config']['inputs'],  # lstm model input variables
@@ -625,7 +631,7 @@ def main(trial: int = 0, adaptive = True):
 			vlv_input_vars=exp_params['vlv_model_config']['inputs'],  # lstm model input variables
 			vlv_input_shape=(1, 1, len(exp_params['vlv_model_config']['inputs'])),  # lstm model input data shape (no_samples, output_timestep, inputdim)
 
-			**params  # the reward adjustment parameters
+			**reward_params  # the reward adjustment parameters
 		)
 
 		if not env_created:
