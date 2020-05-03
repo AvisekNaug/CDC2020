@@ -164,11 +164,11 @@ def dflist2rl_dflist(exp_params, dflist):
 		data_weeks {[int]} -- length of the dataframe in terms of number of weeks
 	"""
 	weeklist = []
-	# num_of_elems = len(dflist)
+	num_of_elems = len(dflist)
 	start_week = exp_params['df2xy']['start_week']
 	end_week = exp_params['df2xy']['data_weeks']
 
-	while end_week<exp_params['df2xy']['end_week']:
+	while end_week<num_of_elems:  # exp_params['df2xy']['end_week']
 		weeklist.append(quickmerge(dflist[start_week : end_week+1]))
 
 		start_week += 1
@@ -180,7 +180,7 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 				inputs, outputs, input_timesteps, output_timesteps,scaleY=True):
 
 	weeklist = []
-	# num_of_elems = len(dflist)
+	num_of_elems = len(dflist)
 	start_week = exp_params['df2xy']['start_week']
 	end_week = exp_params['df2xy']['data_weeks']
 
@@ -190,7 +190,7 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 	yearno = dflist[end_week].index[int(splitvalue/2)].year
 	weekno = dflist[end_week].index[int(splitvalue/2)].week
 
-	while end_week<exp_params['df2xy']['end_week']:
+	while end_week<num_of_elems:  # exp_params['df2xy']['end_week']
 
 		data_block_pre = quickmerge(dflist[start_week : end_week+1])
 		if scaleY:
@@ -324,7 +324,7 @@ def main(trial: int = 0, adaptive = True):
 	os.mkdir(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'detailedplots')
 
 	# steps to train the rl agent
-	exp_params['num_rl_steps'] = 2500
+	exp_params['num_rl_steps'] = 2000000
 	# always make sure that the number of environments is even; can also be os.cpu_count()
 	exp_params['n_envs'] = 2
 	# rl state space
@@ -399,10 +399,10 @@ def main(trial: int = 0, adaptive = True):
 	# important parameters to scale the reward
 	reward_params = {
 		'energy_saved': 2.0, 'energy_savings_thresh': 0.0, 'energy_penalty': -1.0, 'energy_reward_weight': 0.5,
-		'comfort': 2.0, 'comfort_thresh': 0.10, 'uncomfortable': -1.0, 'comfort_reward_weight': 0.5,
-		'action_minmax': [np.array([df.sat.min()]), np.array([df.sat.max()])]  # required for clipping
-		}
+		'comfort': 2.0, 'comfort_thresh': 0.10, 'uncomfortable': -1.0, 'comfort_reward_weight': 0.5,}
+
 	exp_params['reward_params'] = reward_params
+
 	scaled_df_stats = DataFrame(scaler.minmax_scale(df, float_columns), index=df.index,
 							columns=float_columns).describe().loc[['mean', 'std', 'min', 'max'],:]
 	env_id = alumni_env.Env  # the environment ID or the environment class
@@ -413,6 +413,7 @@ def main(trial: int = 0, adaptive = True):
 	# save the metadata
 	with open('../models/'+exp_params['pathinsert']+'/Trial_{}/'.format(exp_params['trial'])+'experiemnt_params.json', 'w') as fp:
 		json.dump(exp_params, fp, indent=4)
+	reward_params['action_minmax'] = [np.array([df.sat.min()]), np.array([df.sat.max()])]  # required for clipping
 
 	# main iteration loop
 
@@ -489,7 +490,7 @@ def main(trial: int = 0, adaptive = True):
 		merged_log_df = DataFrame(data = merged_log, index = cwe_week['test_idx'], 
 								columns = exp_params['cwe_model_config']['inputs'] + 
 								[i+exp_params['cwe_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
-		merged_log_df.to_csv(exp_params['cwe_model_config']['cwe_model_save_dir'] + 'detailedplot/' + cwe_week['Id']+'.csv')
+		merged_log_df.to_csv(exp_params['cwe_model_config']['cwe_model_save_dir'] + 'detailedplots/' + cwe_week['Id']+'.csv')
 
 
 		"""train hwe_model"""
@@ -550,7 +551,7 @@ def main(trial: int = 0, adaptive = True):
 		merged_log_df = DataFrame(data = merged_log, index = hwe_week['test_idx'], 
 									columns = exp_params['hwe_model_config']['inputs'] +
 			 						[i+exp_params['hwe_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
-		merged_log_df.to_csv(exp_params['hwe_model_config']['hwe_model_save_dir'] + 'detailedplot/' +hwe_week['Id']+'.csv')
+		merged_log_df.to_csv(exp_params['hwe_model_config']['hwe_model_save_dir'] + 'detailedplots/' +hwe_week['Id']+'.csv')
 
 		"""train vlv_state_model"""
 		# load the data arrays
@@ -602,7 +603,7 @@ def main(trial: int = 0, adaptive = True):
 		merged_log_df = DataFrame(data = merged_log, index = vlv_week['test_idx'], 
 									columns = exp_params['vlv_model_config']['inputs'] +
 			 						[i+exp_params['vlv_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
-		merged_log_df.to_csv(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'detailedplot/' +vlv_week['Id']+'.csv')
+		merged_log_df.to_csv(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'detailedplots/' +vlv_week['Id']+'.csv')
 
 		
 

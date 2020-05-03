@@ -107,7 +107,7 @@ class Env(gym.Env):
 		self.train_data_limit = int(self.slicepoint * self.nrows)
 		self.test_data_limit = self.nrows
 		# episode_length: dictates number of steps in an episode
-		self.episode_length = 20  # self.train_data_limit
+		self.episode_length = self.train_data_limit  # self.train_data_limit 20
 		# Used to store the old historical action for comparison
 		self.hist_a = None
 		# Information about the reward params
