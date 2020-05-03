@@ -162,7 +162,7 @@ def dflist2rl_dflist(exp_params, dflist):
 		data_weeks {[int]} -- length of the dataframe in terms of number of weeks
 	"""
 	weeklist = []
-	num_of_elems = len(dflist)
+	# num_of_elems = len(dflist)
 	start_week = exp_params['df2xy']['start_week']
 	end_week = exp_params['df2xy']['data_weeks']
 
@@ -178,7 +178,7 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 				inputs, outputs, input_timesteps, output_timesteps,scaleY=True):
 
 	weeklist = []
-	num_of_elems = len(dflist)
+	# num_of_elems = len(dflist)
 	start_week = exp_params['df2xy']['start_week']
 	end_week = exp_params['df2xy']['data_weeks']
 
@@ -191,7 +191,10 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 	while end_week<exp_params['df2xy']['end_week']:
 
 		data_block_pre = quickmerge(dflist[start_week : end_week+1])
-		data_block = df2operating_regions(data_block_pre, threshold_on_cols, threshold)
+		if scaleY:
+			data_block = df2operating_regions(data_block_pre, threshold_on_cols, threshold)
+		else:
+			data_block = data_block_pre
 
 		# create numpy arrays
 		X_train, X_test, y_train, y_test = dp.df_2_arrays(df = data_block,
@@ -200,11 +203,10 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 		 split=splitvalue, shuffle=False,
 		 reshaping=exp_params['df2xy']['reshaping'], input_timesteps=input_timesteps, output_timesteps = output_timesteps,)
 
-		if not scaleY:  # if not scaling Y because its a binary class,
-			# do one hot encoding
+		if not scaleY:  # if not scaling Y because its a binary class
+
 			y_train = to_categorical(y_train)
 			y_test = to_categorical(y_test)
-
 
 		# splitvalue
 		splitvalue = dflist[end_week].shape[0]
@@ -269,7 +271,7 @@ def main(trial: int = 0, adaptive = True):
 	}
 	# create numpy arrays from the data
 	exp_params['df2xy'] = {
-		'start_week' : 0, 'data_weeks' : 39, 'end_week' : 40,
+		'start_week' : 0, 'data_weeks' : 39, 'end_week' : 41,
 		'create_lag' : 0, 'scaling' : True,
 		 'reshaping' : True  # reshape data according to (batch_size, time_steps, features)
 	}
@@ -354,9 +356,9 @@ def main(trial: int = 0, adaptive = True):
 	scaler = dp.dataframescaler(df)
 
 	# add binary classification column
-	df['valve_state'] = 1
-	df.loc[df['hwe']<= exp_params['threshold_energy'],['valve_state']] = 0
-	categorical_columns = ['valve_state']
+	df['valve_state'] = 1.0
+	df.loc[df['hwe']<= exp_params['threshold_energy'],['valve_state']] = 0.0
+	# categorical_columns = ['valve_state']
 
 	# create a list of of weekly dataframes
 	dflist = dp.df2dflist_alt(df, subsequence=True, period=exp_params['period'], days=exp_params['df2dflist']['days'],
@@ -377,11 +379,11 @@ def main(trial: int = 0, adaptive = True):
 					exp_params['hwe_model_config']['inputs'], exp_params['hwe_model_config']['outputs'],
 					exp_params['hwe_model_config']['input_timesteps'], exp_params['hwe_model_config']['output_timesteps'],)
 
-	# Create dflist with weekly overlaps for hwe model
+	# Create dflist with weekly overlaps for vlv model
 	vlv_week_list = dflist2array(exp_params, dflist, scaler,
-					exp_params['hwe_model_config']['outputs'], exp_params['hwe_model_config']['threshold'],
-					exp_params['hwe_model_config']['inputs'], exp_params['hwe_model_config']['outputs'],
-					exp_params['hwe_model_config']['input_timesteps'], exp_params['hwe_model_config']['output_timesteps'], scaleY=False)
+					exp_params['vlv_model_config']['outputs'], exp_params['vlv_model_config']['threshold'],
+					exp_params['vlv_model_config']['inputs'], exp_params['vlv_model_config']['outputs'],
+					exp_params['vlv_model_config']['input_timesteps'], exp_params['vlv_model_config']['output_timesteps'], scaleY=False)
 
 
 	erromsg = "Unequal lists: len(rl_dflist)={0:}, len(cwe_week_list)={1:},\
@@ -394,8 +396,8 @@ def main(trial: int = 0, adaptive = True):
 	#######################         Begin : Prerequisites for the environment     ##################################
 	# important parameters to scale the reward
 	params = {
-		'energy_saved': 1.0, 'energy_savings_thresh': 0.0, 'energy_penalty': -1.0, 'energy_reward_weight': 0.5,
-		'comfort': 1.0, 'comfort_thresh': 0.10, 'uncomfortable': -1.0, 'comfort_reward_weight': 0.5,
+		'energy_saved': 2.0, 'energy_savings_thresh': 0.0, 'energy_penalty': -1.0, 'energy_reward_weight': 0.5,
+		'comfort': 2.0, 'comfort_thresh': 0.10, 'uncomfortable': -1.0, 'comfort_reward_weight': 0.5,
 		'action_minmax': [np.array([df.sat.min()]), np.array([df.sat.max()])]  # required for clipping
 		}
 	scaled_df_stats = DataFrame(scaler.minmax_scale(df, float_columns), index=df.index,
@@ -412,6 +414,7 @@ def main(trial: int = 0, adaptive = True):
 	agent_created = False
 	hwe_created = False
 	cwe_created = False
+	vlv_created = False
 	initial_epoch_cwe, initial_epoch_hwe, initial_epoch_vlv = 0, 0, 0
 	freeze_model = True
 	reinitialize = True
@@ -420,9 +423,9 @@ def main(trial: int = 0, adaptive = True):
 	Week = 0
 
 
-	for out_df, cwe_week, hwe_week in zip(rl_dflist, cwe_week_list[:2], hwe_week_list):
+	for out_df, cwe_week, hwe_week, vlv_week in zip(rl_dflist, cwe_week_list[:2], hwe_week_list, vlv_week_list):
 		
-		"""train lstm model on cwe"""
+		"""train cwe_model"""
 		# load the data arrays
 		X_train, y_train, X_test, y_test = cwe_week['X_train'], cwe_week['y_train'], cwe_week['X_test'], cwe_week['y_test']
 
@@ -472,38 +475,54 @@ def main(trial: int = 0, adaptive = True):
 											Idx=cwe_week['Id'],
 											outputdim_names=[utils.addl['names_abreviation'][exp_params['cwe_model_config']['outputs'][0]]],
 											output_mean = [scaled_df_stats.loc['mean', exp_params['cwe_model_config']['outputs'][0]]])
-		# log the outputs first in a text file
+		# log the outputs first in a csv file
 		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['cwe_model_config']['inputs']), 
 									 scaler.minmax_inverse_scale(y_test[:,-1,:], exp_params['cwe_model_config']['outputs']),
 									 scaler.minmax_inverse_scale(preds_test[:,-1,:], exp_params['cwe_model_config']['outputs'])),
 									 axis=-1)
 		merged_log_df = DataFrame(data = merged_log, index = cwe_week['test_idx'], 
-			columns = exp_params['cwe_model_config']['inputs'] + [i+exp_params['cwe_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
+								columns = exp_params['cwe_model_config']['inputs'] + 
+								[i+exp_params['cwe_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
 		merged_log_df.to_csv(exp_params['cwe_model_config']['cwe_model_save_dir']+cwe_week['Id']+'.csv')
 
 
-		"""train lstm model on hwe"""
+		"""train hwe_model"""
 		# load the data arrays
 		X_train, y_train, X_test, y_test = hwe_week['X_train'], hwe_week['y_train'], hwe_week['X_test'], hwe_week['y_test']
 
-		if not hwe_created:  # create model for the first time
-			hwe_model = create_energy_model(hwe_model_save_dir, modelconfig, X_train.shape,
-			 y_train.shape, period, 'hwe_best_model')
-		else:  # else load saved model and freeze layers and reinitialize head layers
-			hwe_model.model.load_weights(hwe_model_save_dir+'hwe_best_model') # load best model weights in to hwe_model class
+		# create model for the first time
+		if not hwe_created:
+			#Instantiate learner model
+			hwe_model = mp.regression_nn(exp_params['hwe_model_config']['hwe_model_save_dir'],
+										inputdim = X_train.shape[-1],
+										outputdim = y_train.shape[-1],
+										input_timesteps = exp_params['hwe_model_config']['input_timesteps'],
+										output_timesteps = exp_params['hwe_model_config']['output_timesteps'],
+										period = exp_params['period'],
+										stateful = exp_params['hwe_model_config']['train_stateful'],
+										batch_size=exp_params['hwe_model_config']['train_batchsize'])
+			# design the network
+			hwe_model.design_network(
+				lstmhiddenlayers=[exp_params['hwe_model_config']['lstm_hidden_units']] * exp_params['hwe_model_config']['lstm_no_layers'],
+				densehiddenlayers=[exp_params['hwe_model_config']['dense_hidden_units']] * exp_params['hwe_model_config']['dense_no_layers'],
+				dropoutlist=[[], []], batchnormalizelist=[[], []])
+		# else load saved model and freeze layers and reinitialize head layers
+		else:  
+			hwe_model.model.load_weights(exp_params['hwe_model_config']['hwe_model_save_dir']+
+											'LSTM_model_best')  # load best model weights in to hwe_model class
 			if freeze_model:
-				for layer in hwe_model.model.layers[:-modelconfig['retrain_from_layers']]:  # freeze layers
+				for layer in hwe_model.model.layers[:exp_params['hwe_model_config']['retrain_from_layers']]:
 					layer.trainable = False
 			if reinitialize:  
-				for layer in hwe_model.model.layers[-modelconfig['retrain_from_layers']:]:
-						layer.kernel.initializer.run(session=K.get_session())
-						layer.bias.initializer.run(session=K.get_session())
-			# recompile model
-			hwe_model.model_compile()
-			freeze_model = False  # flip the flag
+				for layer in hwe_model.model.layers[exp_params['hwe_model_config']['retrain_from_layers']:]:
+					layer.kernel.initializer.run(session=K.get_session())
+					layer.bias.initializer.run(session=K.get_session())
+		# recompile model
+		hwe_model.model_compile()
+
 
 		# train the model
-		hwe_history = hwe_model.train_model(X_train, y_train, X_test, y_test, epochs=modelconfig['train_epochs'],
+		hwe_history = hwe_model.train_model(X_train, y_train, X_test, y_test, epochs=exp_params['hwe_model_config']['train_epochs'],
 									initial_epoch = initial_epoch_hwe)
 		try:
 			initial_epoch_hwe += len(hwe_history.history['loss'])
@@ -511,9 +530,75 @@ def main(trial: int = 0, adaptive = True):
 			pass
 
 		# evaluate the model for metrics at this stage
-		_, _ = hwe_model.evaluate_model(X_train, y_train, X_test, y_test, hwe_y_scaler, scaling=True,
-											saveplot=True,Idx=hwe_week['Id'],outputdim_names=['Heating Energy'])
+		preds_test = hwe_model.evaluate_model( X_test, y_test, 
+											scaler, save_plot_loc=exp_params['hwe_model_config']['hwe_model_save_dir']+'normalplots/',
+											scaling=True, saveplot=False,
+											Idx=hwe_week['Id'],
+											outputdim_names=[utils.addl['names_abreviation'][exp_params['hwe_model_config']['outputs'][0]]],
+											output_mean = [scaled_df_stats.loc['mean', exp_params['hwe_model_config']['outputs'][0]]])
+		# log the outputs first in a csv file
+		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['hwe_model_config']['inputs']), 
+									 scaler.minmax_inverse_scale(y_test[:,-1,:], exp_params['hwe_model_config']['outputs']),
+									 scaler.minmax_inverse_scale(preds_test[:,-1,:], exp_params['hwe_model_config']['outputs'])),
+									 axis=-1)
+		merged_log_df = DataFrame(data = merged_log, index = hwe_week['test_idx'], 
+									columns = exp_params['hwe_model_config']['inputs'] +
+			 						[i+exp_params['hwe_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
+		merged_log_df.to_csv(exp_params['hwe_model_config']['hwe_model_save_dir']+hwe_week['Id']+'.csv')
 
+		"""train vlv_state_model"""
+		# load the data arrays
+		X_train, y_train, X_test, y_test = vlv_week['X_train'], vlv_week['y_train'], vlv_week['X_test'], vlv_week['y_test']
+
+		# create model for the first time
+		if not vlv_created:
+			#Instantiate learner model
+			vlv_model = mp.classifier_nn(exp_params['vlv_model_config']['vlv_model_save_dir'],
+											inputdim = X_train.shape[-1],
+											outputdim = y_train.shape[-1],
+											input_timesteps = exp_params['vlv_model_config']['input_timesteps'],
+											period = exp_params['period'],
+											stateful = exp_params['vlv_model_config']['train_stateful'],
+											batch_size=exp_params['vlv_model_config']['train_batchsize'])
+			# design the network
+			vlv_model.design_network(
+				lstmhiddenlayers=[exp_params['vlv_model_config']['lstm_hidden_units']] * exp_params['vlv_model_config']['lstm_no_layers'],
+				densehiddenlayers=[exp_params['vlv_model_config']['dense_hidden_units']] * exp_params['vlv_model_config']['dense_no_layers'],
+				dropoutlist=[[], []], batchnormalizelist=[[], []])
+		# else load saved model and freeze layers and reinitialize head layers
+		else:  
+			vlv_model.model.load_weights(exp_params['vlv_model_config']['vlv_model_save_dir']+
+										'LSTM_model_best')  # load best model weights in to vlv_model class
+			if freeze_model:
+				for layer in vlv_model.model.layers[:exp_params['vlv_model_config']['retrain_from_layers']]:
+					layer.trainable = False
+			if reinitialize:  
+				for layer in vlv_model.model.layers[exp_params['vlv_model_config']['retrain_from_layers']:]:
+					layer.kernel.initializer.run(session=K.get_session())
+					layer.bias.initializer.run(session=K.get_session())
+		# recompile model
+		vlv_model.model_compile()
+
+		# train the model
+		vlv_history = vlv_model.train_model(X_train, y_train, X_test, y_test, epochs=exp_params['vlv_model_config']['train_epochs'],
+									initial_epoch = initial_epoch_vlv)
+		try:
+			initial_epoch_vlv += len(vlv_history.history['loss'])
+		except KeyError:
+			pass
+
+		# evaluate the model for metrics at this stage
+		true_test, preds_test = vlv_model.evaluate_model( X_test, y_test, Idx=vlv_week['Id'])
+
+		# log the outputs first in a csv file
+		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['vlv_model_config']['inputs']), 
+									 true_test.reshape((-1,1)), preds_test.reshape((-1,1))), axis=-1)
+		merged_log_df = DataFrame(data = merged_log, index = vlv_week['test_idx'], 
+									columns = exp_params['vlv_model_config']['inputs'] +
+			 						[i+exp_params['vlv_model_config']['outputs'][0] for i in ['Actual ', 'Predicted ']])
+		merged_log_df.to_csv(exp_params['vlv_model_config']['vlv_model_save_dir']+vlv_week['Id']+'.csv')
+
+		
 
 		"""create environment with new data"""
 		# Path to a folder where the monitor files will be saved
@@ -528,15 +613,15 @@ def main(trial: int = 0, adaptive = True):
 			action_space_vars=exp_params['action_space_vars'],  # action space variable
 			action_space_bounds=[[-2.0], [2.0]],  # bounds for real world action space; is scaled internally using the params
 
-			cwe_energy_model=load_model(exp_params['cwe_model_config']['cwe_model_save_dir']+'cwe_best_model'),  # trained lstm model
+			cwe_energy_model=load_model(exp_params['cwe_model_config']['cwe_model_save_dir']+'LSTM_model_best'),  # trained lstm model
 			cwe_input_vars=exp_params['cwe_model_config']['inputs'],  # lstm model input variables
 			cwe_input_shape=(1, 1, len(exp_params['cwe_model_config']['inputs'])),  # lstm model input data shape (no_samples, output_timestep, inputdim)
 
-			hwe_energy_model=load_model(exp_params['hwe_model_config']['hwe_model_save_dir']+'hwe_best_model'),  # trained lstm model
+			hwe_energy_model=load_model(exp_params['hwe_model_config']['hwe_model_save_dir']+'LSTM_model_best'),  # trained lstm model
 			hwe_input_vars=exp_params['hwe_model_config']['inputs'],  # lstm model input variables
 			hwe_input_shape=(1, 1, len(exp_params['hwe_model_config']['inputs'])),  # lstm model input data shape (no_samples, output_timestep, inputdim)
 
-			vlv_energy_model=load_model(exp_params['vlv_model_config']['vlv_model_save_dir']+'vlv_best_model'),  # trained lstm model
+			vlv_state_model=load_model(exp_params['vlv_model_config']['vlv_model_save_dir']+'LSTM_model_best'),  # trained lstm model
 			vlv_input_vars=exp_params['vlv_model_config']['inputs'],  # lstm model input variables
 			vlv_input_shape=(1, 1, len(exp_params['vlv_model_config']['inputs'])),  # lstm model input data shape (no_samples, output_timestep, inputdim)
 
@@ -592,13 +677,16 @@ def main(trial: int = 0, adaptive = True):
 		lu.rl_perf_save(test_perf_log, exp_params['log_dir'], save_as='csv', header=writeheader)
 
 		Week += 1  # shift to the next week
+
 		agent_created = True  # flip the agent_created flag
 		cwe_created = True  # flip the flag
 		hwe_created = True  # flip the flag
+		vlv_created = True  # flip the flag
+
 		writeheader = False # flip the flag
 	
 	# plot the results
-	pu.reward_agg_plot([0], 0, Week, '../log/'+exp_params['pathinsert']+'/',
+	pu.reward_agg_plot([0], 0, Week-1, '../log/'+exp_params['pathinsert']+'/',
 	 '../models/'+exp_params['pathinsert']+'/Trial_{}/'.format(trial), 0)
 
 # wrap the environment in the vectorzied wrapper with SubprocVecEnv
