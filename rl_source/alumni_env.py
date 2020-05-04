@@ -107,7 +107,7 @@ class Env(gym.Env):
 		self.train_data_limit = int(self.slicepoint * self.nrows)
 		self.test_data_limit = self.nrows
 		# episode_length: dictates number of steps in an episode
-		self.episode_length = self.train_data_limit  # self.train_data_limit 20
+		self.episode_length = 1544  # self.train_data_limit 20
 		# Used to store the old historical action for comparison
 		self.hist_a = None
 		# Information about the reward params
@@ -187,6 +187,7 @@ class Env(gym.Env):
 		cwe_hist_energy, hwe_hist_energy = self.energy_cost(s, self.hist_a)
 		rl_energy = cwe_rl_energy + hwe_rl_energy
 		hist_energy = cwe_hist_energy + hwe_hist_energy
+
 		# 'energy_saved' reward if at least 'energy_savings_thresh' energy saved else 'energy_penalty' reward
 		reward_energy = self.params['energy_saved'] if hist_energy-rl_energy>self.params['energy_savings_thresh'] \
 			else self.params['energy_penalty']
@@ -248,6 +249,9 @@ class Env(gym.Env):
 		temp_row = self.df.iloc[[self.dataptr-1],:].copy()  # the -1 there since dataptr has davanced to nxt state
 		# update temp_row columns with in_obs data
 		temp_row.loc[:, in_obs.columns] = in_obs.to_numpy().flatten()
+		
+		# CHANGE THE SAT_OAT difference
+		temp_row['sat-oat'] = temp_row['sat']-temp_row['oat']
 
 		"""cololing energy prediction"""
 		# get input to cwe model

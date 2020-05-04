@@ -324,7 +324,7 @@ def main(trial: int = 0, adaptive = True):
 	os.mkdir(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'detailedplots')
 
 	# steps to train the rl agent
-	exp_params['num_rl_steps'] = 2000000
+	exp_params['num_rl_steps'] = 100000
 	# always make sure that the number of environments is even; can also be os.cpu_count()
 	exp_params['n_envs'] = 2
 	# rl state space
