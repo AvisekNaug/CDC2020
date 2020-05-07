@@ -241,7 +241,7 @@ class readfile():
 @register
 def readcsv(read_path):
 
-	df = pd.read_csv(read_path)
+	df = pd.read_csv(read_path, index_col=0)
 
 	return df
 

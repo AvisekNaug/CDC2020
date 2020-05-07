@@ -168,7 +168,7 @@ def dflist2rl_dflist(exp_params, dflist):
 	start_week = exp_params['df2xy']['start_week']
 	end_week = exp_params['df2xy']['data_weeks']
 
-	while end_week<num_of_elems:  # exp_params['df2xy']['end_week']
+	while end_week<exp_params['df2xy']['end_week']:  # exp_params['df2xy']['end_week']
 		weeklist.append(quickmerge(dflist[start_week : end_week+1]))
 
 		start_week += 1
@@ -190,7 +190,7 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 	yearno = dflist[end_week].index[int(splitvalue/2)].year
 	weekno = dflist[end_week].index[int(splitvalue/2)].week
 
-	while end_week<num_of_elems:  # exp_params['df2xy']['end_week']
+	while end_week<exp_params['df2xy']['end_week']:  # exp_params['df2xy']['end_week']
 
 		data_block_pre = quickmerge(dflist[start_week : end_week+1])
 		if scaleY:
@@ -273,7 +273,7 @@ def main(trial: int = 0, adaptive = True):
 	}
 	# create numpy arrays from the data
 	exp_params['df2xy'] = {
-		'start_week' : 0, 'data_weeks' : 39, 'end_week' : 41,
+		'start_week' : 0, 'data_weeks' : 39, 'end_week' : 60,
 		'create_lag' : 0, 'scaling' : True,
 		 'reshaping' : True  # reshape data according to (batch_size, time_steps, features)
 	}
@@ -324,7 +324,7 @@ def main(trial: int = 0, adaptive = True):
 	os.mkdir(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'detailedplots')
 
 	# steps to train the rl agent
-	exp_params['num_rl_steps'] = 100000
+	exp_params['num_rl_steps'] = 50000
 	# always make sure that the number of environments is even; can also be os.cpu_count()
 	exp_params['n_envs'] = 2
 	# rl state space
@@ -430,7 +430,7 @@ def main(trial: int = 0, adaptive = True):
 	Week = 0
 
 
-	for out_df, cwe_week, hwe_week, vlv_week in zip(rl_dflist, cwe_week_list[:2], hwe_week_list, vlv_week_list):
+	for out_df, cwe_week, hwe_week, vlv_week in zip(rl_dflist, cwe_week_list, hwe_week_list, vlv_week_list):
 		
 		"""train cwe_model"""
 		# load the data arrays
@@ -685,7 +685,7 @@ def main(trial: int = 0, adaptive = True):
 
 		Week += 1  # shift to the next week
 
-		agent_created = True  # flip the agent_created flag
+		agent_created = False  # flip the agent_created flag
 		cwe_created = True  # flip the flag
 		hwe_created = True  # flip the flag
 		vlv_created = True  # flip the flag
@@ -700,5 +700,5 @@ def main(trial: int = 0, adaptive = True):
 # run the environment inside if __name__ == '__main__':
 
 if __name__ == '__main__':
-	main(trial = 0, adaptive = True)
+	main(trial = 2, adaptive = True)
 	print("Done!")

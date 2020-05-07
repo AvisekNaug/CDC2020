@@ -189,8 +189,9 @@ class Env(gym.Env):
 		hist_energy = cwe_hist_energy + hwe_hist_energy
 
 		# 'energy_saved' reward if at least 'energy_savings_thresh' energy saved else 'energy_penalty' reward
-		reward_energy = self.params['energy_saved'] if hist_energy-rl_energy>self.params['energy_savings_thresh'] \
-			else self.params['energy_penalty']
+		# reward_energy = self.params['energy_saved'] if hist_energy-rl_energy>self.params['energy_savings_thresh'] \
+			# else self.params['energy_penalty']
+		reward_energy = hist_energy-rl_energy
 		# reward_energy *= self.params['energy_reward_weight']  # don't weight it so that we can try ad hoc weights
 		reward_energy /= self.episode_length
 
@@ -200,8 +201,9 @@ class Env(gym.Env):
 		# extract vrf average setpoint temperature
 		avg_vrf_stpt = s.loc[s.index[0], 'avg_stpt']
 		# 'comfort' reward if T_rl_disch close to avg_vrf_stpt by 'comfort_thresh' else 'uncomfort' reward
-		reward_comfort = self.params['comfort'] if abs(T_rl_disch-avg_vrf_stpt) < self.params['comfort_thresh'] \
-			else self.params['uncomfortable']
+		# reward_comfort = self.params['comfort'] if abs(T_rl_disch-avg_vrf_stpt) < self.params['comfort_thresh'] \
+			# else self.params['uncomfortable']
+		reward_comfort = -1*abs(T_rl_disch-avg_vrf_stpt)
 		# reward_comfort *= self.params['comfort_reward_weight']  # don't weight it so that we can try ad hoc weights
 		reward_comfort /= self.episode_length  # scale reward in case the episode lengths are not equal
 
