@@ -413,7 +413,7 @@ def main(trial: int = 0, adaptive = True):
 	# save the metadata
 	with open('../models/'+exp_params['pathinsert']+'/Trial_{}/'.format(exp_params['trial'])+'experiemnt_params.json', 'w') as fp:
 		json.dump(exp_params, fp, indent=4)
-	reward_params['action_minmax'] = [np.array([df.sat.min()]), np.array([df.sat.max()])]  # required for clipping
+	reward_params['action_minmax'] = [np.array([df.sat_stpt.min()]), np.array([df.sat_stpt.max()])]  # required for clipping
 
 	# main iteration loop
 

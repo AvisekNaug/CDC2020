@@ -943,59 +943,68 @@ class dataframescaler():
 	"""
 	def __init__(self, df):
 		
-		self.df = df  # get the dataframe
-
-		self.stats = df.describe()  # collect the statistics of a dataframe
-
-		self.columns = df.columns
+		if isinstance(df, str):
+			self.stats = pd.read_pickle(df)
+			self.columns = self.stats.columns
+		else:
+			self.df = df  # get the dataframe
+			self.stats = df.describe()  # collect the statistics of a dataframe
+			self.columns = df.columns  # save column names
 
 	def minmax_scale(self,
 					 input_data : Union[pd.DataFrame, np.ndarray], 
-					 input_columns: list):
+					 input_columns: list, df_2scale_columns: list):
 
-		min = self.stats.loc['min',input_columns]
-		max = self.stats.loc['max',input_columns]
+		x_min = self.stats.loc['min',input_columns]
+		x_max = self.stats.loc['max',input_columns]
 
 		if isinstance(input_data,pd.DataFrame):
-			return (input_data[input_columns]-min)/(max-min)
+			return (input_data[df_2scale_columns].to_numpy()-x_min.to_numpy())/(x_max.to_numpy()-x_min.to_numpy())
 		else:
-			return (input_data-min.to_numpy())/(max.to_numpy()-min.to_numpy())
+			return (input_data-x_min.to_numpy())/(x_max.to_numpy()-x_min.to_numpy())
 
 	def minmax_inverse_scale(self,
 					 input_data : Union[pd.DataFrame, np.ndarray], 
-					 input_columns: list):
+					 input_columns: list, df_2scale_columns: list):
 
-		min = self.stats.loc['min',input_columns]
-		max = self.stats.loc['max',input_columns]
+		x_min = self.stats.loc['min',input_columns]
+		x_max = self.stats.loc['max',input_columns]
 
 		if isinstance(input_data,pd.DataFrame):
-			return input_data[input_columns]*(max-min) + min
+			return input_data[df_2scale_columns].to_numpy()*(x_max.to_numpy()-x_min.to_numpy()) + x_min.to_numpy()
 		else:
-			return input_data*(max.to_numpy()-min.to_numpy()) + min.to_numpy()
+			return input_data*(x_max.to_numpy()-x_min.to_numpy()) + x_min.to_numpy()
 		
 	def standard_scale(self, 
 						input_data : Union[pd.DataFrame, np.ndarray], 
-						input_columns: list):
+						input_columns: list, df_2scale_columns: list):
 		
-		mean= self.stats.loc['mean',input_columns]
-		std = self.stats.loc['std',input_columns]
+		x_mean= self.stats.loc['mean',input_columns]
+		x_std = self.stats.loc['std',input_columns]
 
 		if isinstance(input_data,pd.DataFrame):
-			return (input_data[input_columns]-mean)/std
+			return (input_data[df_2scale_columns].to_numpy()-x_mean.to_numpy())/x_std.to_numpy()
 		else:
-			return (input_data-mean.to_numpy())/std.to_numpy()
+			return (input_data-x_mean.to_numpy())/x_std.to_numpy()
 
 	def standard_inverse_scale(self, 
 						input_data : Union[pd.DataFrame, np.ndarray], 
-						input_columns: list):
+						input_columns: list, df_2scale_columns: list):
 		
-		mean= self.stats.loc['mean',input_columns]
-		std = self.stats.loc['std',input_columns]
+		x_mean= self.stats.loc['mean',input_columns]
+		x_std = self.stats.loc['std',input_columns]
 
 		if isinstance(input_data,pd.DataFrame):
-			return input_data[input_columns]*std + mean
+			return input_data[df_2scale_columns].to_numpy()*x_std.to_numpy() + x_mean.to_numpy()
 		else:
-			return input_data*std.to_numpy() + mean.to_numpy()
+			return input_data*x_std.to_numpy() + x_mean.to_numpy()
+
+	def save_stats(self, path: str):
+
+		if not path.endswith('/'):
+			path += '/'
+
+		self.stats.to_pickle(path + 'datastats.pkl')
 
 def df_2_arrays( df,
 				 predictorcols : list, 
