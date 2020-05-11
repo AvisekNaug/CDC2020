@@ -1041,9 +1041,9 @@ def df_2_arrays( df,
 	# 1 Scales the arrays if needed
 	if scaling:
 		if scaleX:
-			X = scaler.minmax_scale(X, predictorcols)
+			X = scaler.minmax_scale(X, predictorcols, predictorcols)
 		if scaleY:
-			y = scaler.minmax_scale(y, outputcols)
+			y = scaler.minmax_scale(y, outputcols, outputcols)
 
 
 	if type(split) == float:

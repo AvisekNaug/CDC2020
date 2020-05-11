@@ -1,4 +1,4 @@
-seed = 123  # the initial seed for the random number generator
+seed = 0  # the initial seed for the random number generator
 
 # 1. Set the `PYTHONHASHSEED` environment variable at a fixed value
 import os
@@ -236,7 +236,7 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 
 	return weeklist
 
-def main(trial: int = 0, adaptive = True):
+def main(trial: int = 6, adaptive = True):
 
 	exp_params = {}  # log experiment parameters
 
@@ -273,7 +273,7 @@ def main(trial: int = 0, adaptive = True):
 	}
 	# create numpy arrays from the data
 	exp_params['df2xy'] = {
-		'start_week' : 0, 'data_weeks' : 39, 'end_week' : 60,
+		'start_week' : 0, 'data_weeks' : 39, 'end_week' : 55,
 		'create_lag' : 0, 'scaling' : True,
 		 'reshaping' : True  # reshape data according to (batch_size, time_steps, features)
 	}
@@ -324,9 +324,9 @@ def main(trial: int = 0, adaptive = True):
 	os.mkdir(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'detailedplots')
 
 	# steps to train the rl agent
-	exp_params['num_rl_steps'] = 50000
+	exp_params['num_rl_steps'] = 25000
 	# always make sure that the number of environments is even; can also be os.cpu_count()
-	exp_params['n_envs'] = 2
+	exp_params['n_envs'] = 1
 	# rl state space
 	exp_params['obs_space_vars']=['oat', 'orh', 'wbt', 'avg_stpt', 'sat',]
 	# rl action space
@@ -398,16 +398,16 @@ def main(trial: int = 0, adaptive = True):
 	#######################         Begin : Prerequisites for the environment     ##################################
 	# important parameters to scale the reward
 	reward_params = {
-		'energy_saved': 2.0, 'energy_savings_thresh': 0.0, 'energy_penalty': -1.0, 'energy_reward_weight': 0.5,
-		'comfort': 2.0, 'comfort_thresh': 0.10, 'uncomfortable': -1.0, 'comfort_reward_weight': 0.5,}
+		'energy_saved': 100.0, 'energy_savings_thresh': 0.0, 'energy_penalty': -100.0, 'energy_reward_weight': 0.5,
+		'comfort': 1.0, 'comfort_thresh': 0.10, 'uncomfortable': -1.0, 'comfort_reward_weight': 0.5,}
 
 	exp_params['reward_params'] = reward_params
 
-	scaled_df_stats = DataFrame(scaler.minmax_scale(df, float_columns), index=df.index,
+	scaled_df_stats = DataFrame(scaler.minmax_scale(df, float_columns, float_columns), index=df.index,
 							columns=float_columns).describe().loc[['mean', 'std', 'min', 'max'],:]
 	env_id = alumni_env.Env  # the environment ID or the environment class
 	start_index = 0  # start rank index
-	vec_env_cls = SubprocVecEnv  #  A custom `VecEnv` class constructor. Default: DummyVecEnv
+	vec_env_cls = DummyVecEnv #  A custom `VecEnv` class constructor. Default: DummyVecEnv SubprocVecEnv 
 	#######################         End : Prerequisites for the environment     ##################################
 
 	# save the metadata
@@ -483,9 +483,12 @@ def main(trial: int = 0, adaptive = True):
 											outputdim_names=[utils.addl['names_abreviation'][exp_params['cwe_model_config']['outputs'][0]]],
 											output_mean = [scaled_df_stats.loc['mean', exp_params['cwe_model_config']['outputs'][0]]])
 		# log the outputs first in a csv file
-		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['cwe_model_config']['inputs']), 
-									 scaler.minmax_inverse_scale(y_test[:,-1,:], exp_params['cwe_model_config']['outputs']),
-									 scaler.minmax_inverse_scale(preds_test[:,-1,:], exp_params['cwe_model_config']['outputs'])),
+		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['cwe_model_config']['inputs'], 
+										exp_params['cwe_model_config']['inputs']), 
+									 scaler.minmax_inverse_scale(y_test[:,-1,:], exp_params['cwe_model_config']['outputs'],
+									 exp_params['cwe_model_config']['outputs']),
+									 scaler.minmax_inverse_scale(preds_test[:,-1,:], exp_params['cwe_model_config']['outputs'],
+									 exp_params['cwe_model_config']['outputs'])),
 									 axis=-1)
 		merged_log_df = DataFrame(data = merged_log, index = cwe_week['test_idx'], 
 								columns = exp_params['cwe_model_config']['inputs'] + 
@@ -544,9 +547,12 @@ def main(trial: int = 0, adaptive = True):
 											outputdim_names=[utils.addl['names_abreviation'][exp_params['hwe_model_config']['outputs'][0]]],
 											output_mean = [scaled_df_stats.loc['mean', exp_params['hwe_model_config']['outputs'][0]]])
 		# log the outputs first in a csv file
-		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['hwe_model_config']['inputs']), 
-									 scaler.minmax_inverse_scale(y_test[:,-1,:], exp_params['hwe_model_config']['outputs']),
-									 scaler.minmax_inverse_scale(preds_test[:,-1,:], exp_params['hwe_model_config']['outputs'])),
+		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['hwe_model_config']['inputs'],
+										exp_params['hwe_model_config']['inputs']), 
+									 scaler.minmax_inverse_scale(y_test[:,-1,:], exp_params['hwe_model_config']['outputs'],
+									 exp_params['hwe_model_config']['outputs']),
+									 scaler.minmax_inverse_scale(preds_test[:,-1,:], exp_params['hwe_model_config']['outputs'],
+									 exp_params['hwe_model_config']['outputs'])),
 									 axis=-1)
 		merged_log_df = DataFrame(data = merged_log, index = hwe_week['test_idx'], 
 									columns = exp_params['hwe_model_config']['inputs'] +
@@ -598,7 +604,8 @@ def main(trial: int = 0, adaptive = True):
 		true_test, preds_test = vlv_model.evaluate_model( X_test, y_test, Idx=vlv_week['Id'])
 
 		# log the outputs first in a csv file
-		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['vlv_model_config']['inputs']), 
+		merged_log =  np.concatenate((scaler.minmax_inverse_scale(X_test[:,-1,:], exp_params['vlv_model_config']['inputs'],
+										exp_params['vlv_model_config']['inputs']), 
 									 true_test.reshape((-1,1)), preds_test.reshape((-1,1))), axis=-1)
 		merged_log_df = DataFrame(data = merged_log, index = vlv_week['test_idx'], 
 									columns = exp_params['vlv_model_config']['inputs'] +
@@ -611,7 +618,7 @@ def main(trial: int = 0, adaptive = True):
 		# Path to a folder where the monitor files will be saved
 		monitor_dir = exp_params['base_log_path']+'Interval_{}/'.format(Week)
 		
-		out_df[float_columns] = scaler.minmax_scale(out_df, float_columns)  # the file for iterating; it is scaled before being passed
+		out_df[float_columns] = scaler.minmax_scale(out_df, float_columns, float_columns)  # the file for iterating; it is scaled before being passed
 		# Arguments to be fed to the custom environment inside make_vec_env
 		env_kwargs = dict(  #  Optional keyword argument to pass to the env constructor
 			df = out_df, # the file for iterating
@@ -685,20 +692,20 @@ def main(trial: int = 0, adaptive = True):
 
 		Week += 1  # shift to the next week
 
-		agent_created = False  # flip the agent_created flag
-		cwe_created = True  # flip the flag
-		hwe_created = True  # flip the flag
-		vlv_created = True  # flip the flag
+		agent_created = True  # flip the agent_created flag
+		cwe_created = False  # flip the flag
+		hwe_created = False  # flip the flag
+		vlv_created = False  # flip the flag
 
 		writeheader = False # flip the flag
 	
 	# plot the results
-	pu.reward_agg_plot([0], 0, Week-1, '../log/'+exp_params['pathinsert']+'/',
+	pu.reward_agg_plot([trial], 0, Week-1, '../log/'+exp_params['pathinsert']+'/',
 	 '../models/'+exp_params['pathinsert']+'/Trial_{}/'.format(trial), 0)
 
 # wrap the environment in the vectorzied wrapper with SubprocVecEnv
 # run the environment inside if __name__ == '__main__':
 
 if __name__ == '__main__':
-	main(trial = 2, adaptive = True)
+	main()
 	print("Done!")
