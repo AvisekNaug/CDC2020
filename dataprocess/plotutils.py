@@ -158,7 +158,7 @@ def classification_plot(timegap, xs, input_timesteps, pred, target, X_var, x_loc
 
 def regression_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 0.50, smoothcurve: bool = False,
  bar_annotate: bool = False, saveplot: bool = False, plot_name: str = 'BarPlot', xlabel: str = 'Xlabel', ylabel: str = 'ylabel',
- title: str = 'Title', xticktype: str = 'Bar', xticklist = None, plotwidth = None, plotheight = 15, fontsize = 16, 
+ title: str = 'Title', xticktype: str = 'Bar', xticklist = None, plotwidth = None, plotheight = 15, fontsize = 16, avg_line = False,
  savetitle = 'Error Bar Plot.png'):
 
 	if plotwidth is None:
@@ -175,17 +175,23 @@ def regression_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidt
 	plt.bar(ind,
 	 bars, 
 	 barwidth, 
-	 color=color, 
-	 label=bar_label)
+	 color=color, )
+	 #label=bar_label)
+
+	# horizontal average line
+	if avg_line:
+		avg_ = sum(bars) / len(bars) 
+		plt.axhline(avg_, c = 'k',ls='dashdot', label='Average CVRMSE :{0:.2f}%'.format(avg_),linewidth=3)
 
 	if xticklist is None:
 		plt.xticks(ind, [xticktype + str(i) for i in range(1, N + 1)], rotation = 45)
 	else:
 		plt.xticks(ind, xticklist, rotation = 90)
-	plt.ylim((0,max(bars)+10))
+	plt.ylim((0,max(bars)+5))
 	plt.ylabel(ylabel)
 	plt.xlabel(xlabel)
-	plt.title(title)
+	plt.legend(fontsize=18)
+	#plt.title(title)
 
 	if smoothcurve:
 		T = np.array([i for i in range(len(bars))])
@@ -196,10 +202,10 @@ def regression_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidt
 
 	if bar_annotate:
 		for i, v in enumerate(bars):
-			plt.text(i - 0.30, bars[i] + 0.35, '{0:.1f}%'.format(np.abs(v)), color='g',
-			 fontweight='bold', fontsize=9, rotation= 90)
-			plt.text(i - 0.30, 5, str(i+1), color='k',
-			 fontweight='bold', fontsize=9, rotation= 0)
+			plt.text(i-0.3 , bars[i] + 1.5, '{0:.1f}%'.format(np.abs(v)), color='k',
+			 fontweight='bold', fontsize=15, rotation= 90)
+			plt.text(i-0.3 , 7, str(i+1), color='k',
+			 fontweight='bold', fontsize=15, rotation= 0)
 
 	if saveplot:
 		# attach forward slash if saveloc does not have one
@@ -210,8 +216,8 @@ def regression_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidt
 
 def classification_bar_plot(bars: list, color, bar_label: str, saveloc: str, barwidth = 0.50, smoothcurve: bool = False,
  bar_annotate: bool = False, saveplot: bool = False, plot_name: str = 'BarPlot', xlabel: str = 'Xlabel', ylabel: str = 'ylabel',
- title: str = 'Title', xticktype: str = 'Bar', xticklist = None, plotwidth = None, plotheight = 15, fontsize = 16, 
- savetitle = 'Prediction Bar Plot.png'):
+ title: str = 'Title', xticktype: str = 'Bar', xticklist = None, plotwidth = None, plotheight = 15, fontsize = 16,  avg_line = False,
+ metric_name = 'Accuracy', savetitle = 'Prediction Bar Plot.png'):
 
 	if plotwidth is None:
 		plt.rcParams["figure.figsize"] = (0.6*len(bars), plotheight)
@@ -227,17 +233,23 @@ def classification_bar_plot(bars: list, color, bar_label: str, saveloc: str, bar
 	plt.bar(ind,
 	 bars, 
 	 barwidth, 
-	 color=color, 
-	 label=bar_label)
+	 color=color, )
+	 #label=bar_label)
+
+	# horizontal average line
+	if avg_line:
+		avg_ = sum(bars) / len(bars)
+		plt.axhline(avg_, c = 'k',ls='dashdot', label='Average {} : {:.2f}'.format(metric_name,avg_),linewidth=3)
 
 	if xticklist is None:
 		plt.xticks(ind, [xticktype + str(i) for i in range(1, N + 1)], rotation = 45)
 	else:
 		plt.xticks(ind, xticklist, rotation = 90)
-	plt.ylim((0.0,1.2))
+	plt.ylim((0.0,1.1))
 	plt.ylabel(ylabel)
 	plt.xlabel(xlabel)
-	plt.title(title)
+	plt.legend(fontsize=18)
+	#plt.title(title)
 
 	if smoothcurve:
 		T = np.array([i for i in range(len(bars))])
@@ -248,10 +260,10 @@ def classification_bar_plot(bars: list, color, bar_label: str, saveloc: str, bar
 
 	if bar_annotate:
 		for i, v in enumerate(bars):
-			plt.text(i - 0.30, bars[i] + 0.02, '{0:.2f}'.format(np.abs(v)), color='g',
-			 fontweight='bold', fontsize=9, rotation= 90)
+			plt.text(i - 0.30, bars[i] + 0.05, '{0:.2f}'.format(np.abs(v)), color='k',
+			 fontweight='bold', fontsize=15, rotation= 90)
 			plt.text(i - 0.30, 0.3, str(i+1), color='k',
-			 fontweight='bold', fontsize=9, rotation= 0)
+			 fontweight='bold', fontsize=15, rotation= 0)
 
 	if saveplot:
 		# attach forward slash if saveloc does not have one

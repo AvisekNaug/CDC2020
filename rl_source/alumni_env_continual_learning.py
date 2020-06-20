@@ -236,7 +236,7 @@ def dflist2array(exp_params, dflist, scaler, threshold_on_cols, threshold,
 
 	return weeklist
 
-def main(trial: int = 6, adaptive = True):
+def main(trial: int = 7, adaptive = True):
 
 	exp_params = {}  # log experiment parameters
 
@@ -273,7 +273,7 @@ def main(trial: int = 6, adaptive = True):
 	}
 	# create numpy arrays from the data
 	exp_params['df2xy'] = {
-		'start_week' : 0, 'data_weeks' : 39, 'end_week' : 55,
+		'start_week' : 30, 'data_weeks' : 39, 'end_week' : 70,
 		'create_lag' : 0, 'scaling' : True,
 		 'reshaping' : True  # reshape data according to (batch_size, time_steps, features)
 	}
@@ -281,11 +281,11 @@ def main(trial: int = 6, adaptive = True):
 	# cwe model configuration
 	exp_params['cwe_model_config'] = {
 		'inputs': ['flow', 'orh', 'wbt',  'sat-oat'], 'outputs' : ['cwe'], 'threshold': 0.5,
-		'input_timesteps' : 1,  'output_timesteps' : 1,
-		'lstm_hidden_units': 8, 'lstm_no_layers': 2, 'dense_hidden_units': 16, 'dense_no_layers': 4,
-		'retrain_from_layers': 3, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
+		'input_timesteps' : 1,  'output_timesteps' : 1, 
+		'lstm_hidden_units': 8, 'lstm_no_layers': 0, 'dense_hidden_units': 16, 'dense_no_layers': 6,
+		'retrain_from_layers': 0, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
 		'modeldesigndone' : False, 'initial_epoch' : 0, 'retain_prev_model' : True,
-		'freeze_model' : True, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
+		'freeze_model' : False, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
 		'cwe_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/cwe/'.format(exp_params['trial']),
 	}
 	make_dir2(exp_params['cwe_model_config']['cwe_model_save_dir'])  # create the folder if it does not exist
@@ -298,9 +298,9 @@ def main(trial: int = 6, adaptive = True):
 		'inputs': ['oat', 'orh', 'wbt', 'sat-oat'], 'outputs' : ['hwe'], 'threshold': 0.5,
 		'input_timesteps' : 1,  'output_timesteps' : 1, 
 		'lstm_hidden_units': 4, 'lstm_no_layers': 0, 'dense_hidden_units': 16, 'dense_no_layers': 6,
-		'retrain_from_layers': 3, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
+		'retrain_from_layers': 0, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
 		'modeldesigndone' : False, 'initial_epoch' : 0, 'retain_prev_model' : True,
-		'freeze_model' : True, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
+		'freeze_model' : False, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
 		'hwe_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/hwe/'.format(exp_params['trial']),
 	}
 	make_dir2(exp_params['hwe_model_config']['hwe_model_save_dir'])  # create the folder if it does not exist
@@ -316,7 +316,7 @@ def main(trial: int = 6, adaptive = True):
 		'lstm_hidden_units': 8, 'lstm_no_layers': 2, 'dense_hidden_units': 16, 'dense_no_layers': 4,
 		'retrain_from_layers': 3, 'train_stateful': False, 'train_batchsize':32, 'train_epochs': 5000,
 		'modeldesigndone' : False, 'initial_epoch' : 0, 'retain_prev_model' : True,
-		'freeze_model' : True, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
+		'freeze_model' : False, 'reinitialize' : True, 'model_saved' : False, 'test_model_created' : False,
 		'vlv_model_save_dir' : '../models/'+exp_params['pathinsert']+'/Trial_{}/vlv/'.format(exp_params['trial']),
 	}
 	make_dir2(exp_params['vlv_model_config']['vlv_model_save_dir'])  # create the folder if it does not exist
@@ -324,7 +324,7 @@ def main(trial: int = 6, adaptive = True):
 	os.mkdir(exp_params['vlv_model_config']['vlv_model_save_dir'] + 'detailedplots')
 
 	# steps to train the rl agent
-	exp_params['num_rl_steps'] = 25000
+	exp_params['num_rl_steps'] = 15000
 	# always make sure that the number of environments is even; can also be os.cpu_count()
 	exp_params['n_envs'] = 1
 	# rl state space
